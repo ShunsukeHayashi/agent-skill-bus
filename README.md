@@ -1,6 +1,8 @@
 # 🚌 Agent Skill Bus
 
-**A self-improving task orchestration framework for AI agent systems.**
+**The missing runtime for [Agent Skills](https://agentskills.io) — health monitoring, self-improvement, and dependency management for any AI agent framework.**
+
+Your agent skills silently break. Agent Skill Bus detects it, diagnoses the root cause, and fixes it automatically.
 
 Built by [合同会社みやび (LLC Miyabi)](https://miyabi-ai.jp) — Running 42 AI agents in production daily.
 
@@ -16,7 +18,7 @@ Built by [合同会社みやび (LLC Miyabi)](https://miyabi-ai.jp) — Running 
 
 ## What is this?
 
-Agent Skill Bus is a framework-agnostic toolkit for orchestrating, monitoring, and self-improving AI agent skills. It consists of three integrated modules:
+Agent Skill Bus is a **framework-agnostic runtime for AI agent skill health** — orchestrating, monitoring, and self-improving agent skills across any framework. Think of it as the operational backbone that keeps your agent skills healthy over weeks and months, not just during a single run. It consists of three integrated modules:
 
 | Module | Purpose | Standalone? |
 |--------|---------|-------------|
@@ -160,6 +162,16 @@ When a change is detected:
 
 [Full documentation →](skills/knowledge-watcher/SKILL.md)
 
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Architecture Deep Dive](docs/architecture.md) | System design, JSONL data layer, DAG scheduling, file locking |
+| [Self-Improving Skills](docs/self-improving-skills.md) | The 7-step quality loop, drift detection, auto-repair |
+| [Knowledge Watcher](docs/knowledge-watcher.md) | Three-tier monitoring, change detection, impact assessment |
+| [Integration Guide](docs/integration-guide.md) | Claude Code, Codex, LangGraph, CrewAI, CI/CD setup |
+| [Framework Comparison](docs/comparison.md) | Feature matrix vs. LangGraph, CrewAI, AutoGen, Mastra, VoltAgent |
+
 ## Architecture
 
 ```
@@ -213,6 +225,28 @@ This framework runs in production at 合同会社みやび:
 - **44 cron jobs** feeding the bus
 - **7-minute security incident response** (fastest recorded)
 - **57% reduction in skill failures** after enabling self-improvement loop
+
+## Agent Skills Standard
+
+Agent Skill Bus is designed to work with the [Agent Skills Standard](https://agentskills.io) — the open specification for portable AI agent skills. Each skill follows the `SKILL.md` format and can be used across Claude Code, Codex, OpenClaw, and any compatible agent runtime.
+
+```
+your-project/
+├── skills/
+│   ├── api-caller/
+│   │   └── SKILL.md          # Skill definition (Agent Skills Standard)
+│   ├── code-reviewer/
+│   │   └── SKILL.md
+│   └── deploy-pipeline/
+│       └── SKILL.md
+├── .agent-skill-bus/
+│   ├── queue.jsonl            # Task queue
+│   ├── skill-runs.jsonl       # Execution history
+│   ├── knowledge-diffs.jsonl  # Detected changes
+│   └── active-locks.jsonl     # File locks
+```
+
+The Self-Improving Skills module reads `SKILL.md` files to understand what each skill does, diagnoses failures in context, and can propose targeted fixes — all without any skill-specific configuration.
 
 ## Contributing
 
