@@ -1,38 +1,49 @@
-# Contributing to Agent Skill Bus
+# Contributing to agent-skill-bus
 
-Thanks for your interest! Here's how to contribute.
+## Local Setup
 
-## Quick Start
+```bash
+git clone https://github.com/your-org/agent-skill-bus.git
+cd agent-skill-bus
+```
 
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feat/my-feature`)
-3. Make your changes
-4. Test with your agent setup
-5. Submit a PR
+No install step needed — the project has zero dependencies and uses only Node.js built-ins.
 
-## What We're Looking For
+## Running Tests
 
-- **Framework integrations** — Examples for LangGraph, CrewAI, AutoGen, etc.
-- **New knowledge sources** — Tier 1/2/3 source implementations for Knowledge Watcher
-- **Visualization tools** — DAG visualizers, health dashboards
-- **Performance improvements** — Better deduplication, faster queue processing
-- **Documentation** — Tutorials, guides, translations
+```bash
+node --test src/**/*.test.js
+```
 
-## Guidelines
+Or run a single test file:
 
-- Keep it framework-agnostic. No vendor lock-in.
-- JSONL is the data layer. Don't add database dependencies.
-- Test your changes with real agents if possible.
-- Follow existing SKILL.md format for new modules.
+```bash
+node --test src/bus/bus.test.js
+```
 
-## Reporting Issues
+## Adding a New Module
 
-Open an issue with:
-- What you expected
-- What happened
-- Your agent framework and version
-- Relevant JSONL entries (redact sensitive data)
+1. Create `src/<module-name>/<module-name>.js` (ESM, no external imports)
+2. Create `src/<module-name>/<module-name>.test.js` using `node:test`
+3. Export your public API from `src/index.js`
+4. Update `README.md` with usage examples
 
-## License
+## Pull Request Guidelines
 
-By contributing, you agree that your contributions will be licensed under MIT.
+- Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `chore:`, `docs:`, `test:`
+- Every new feature or bug fix must include tests
+- All existing tests must pass before opening a PR
+- Keep PRs focused — one concern per PR
+- Squash commits before merge if the history is noisy
+
+## Code Style
+
+- ESM only (`import`/`export`, `"type": "module"` in `package.json`)
+- No external dependencies — Node.js built-ins only (`node:fs`, `node:events`, etc.)
+- Target Node.js 18+ (LTS)
+- Prefer `const` over `let`; avoid `var`
+- No build step required
+
+## Issue Templates
+
+Use the issue templates in `.github/ISSUE_TEMPLATE/` for bug reports and feature requests.

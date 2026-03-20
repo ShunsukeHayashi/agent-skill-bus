@@ -4,6 +4,7 @@
   "description": "Self-improving task orchestration framework for AI agent systems",
   "type": "module",
   "main": "src/index.js",
+  "types": "types/index.d.ts",
   "bin": {
     "skill-bus": "src/cli.js",
     "agent-skill-bus": "src/cli.js"

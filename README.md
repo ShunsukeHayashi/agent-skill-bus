@@ -196,3 +196,41 @@ Building the future of AI agent operations.
 - 🐦 [@The_AGI_WAY](https://x.com/The_AGI_WAY)
 - 💬 [Discord](https://discord.gg/miyabi)
 - 📧 shunsuke.hayashi@miyabi-ai.jp
+
+---
+
+## 日本語ドキュメント
+
+### agent-skill-bus とは
+
+AIエージェントシステム向けの**自己改善型タスクオーケストレーションフレームワーク**です。複数のAIエージェントが協調してタスクを実行する際に必要な、タスクキュー・スキル品質監視・ナレッジ管理の3つの機能を提供します。
+
+Claude Code、Codex、LangGraph、CrewAI、AutoGenなど、あらゆるLLMエージェントと組み合わせて使用できます。依存関係ゼロ、MITライセンス。
+
+### インストール
+
+```bash
+npm install agent-skill-bus
+```
+
+### クイックスタート
+
+```bash
+# プロジェクトを初期化
+npx skill-bus init
+
+# タスクキューを起動
+npx skill-bus run
+```
+
+### モジュール一覧
+
+| モジュール | 名称 | 説明 |
+|-----------|------|------|
+| **Prompt Request Bus** | DAGタスクキュー | 依存関係を考慮したタスクの並列・逐次実行 |
+| **Self-Improving Skills** | スキル品質モニタリング | 各スキルの成功率・失敗パターンを追跡し、自動改善サイクルを実現 |
+| **Knowledge Watcher** | ナレッジウォッチャー | コードベースやドキュメントの変更を監視し、エージェントのコンテキストを最新に維持 |
+
+### ライセンス
+
+MIT License — [合同会社みやび](https://miyabi-ai.jp)（代表: 林 駿甫）
