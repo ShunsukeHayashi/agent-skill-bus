@@ -1,6 +1,6 @@
 {
   "name": "agent-skill-bus",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Self-improving task orchestration framework for AI agent systems",
   "type": "module",
   "main": "src/index.js",
