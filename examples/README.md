@@ -13,9 +13,18 @@ node --version                   # requires Node.js >= 18
 
 | File | What it shows |
 |------|--------------|
+| [`basic-usage.js`](./basic-usage.js) | Quick start: queue + dispatch + skill monitoring in one script |
 | [`basic-dag-queue.js`](./basic-dag-queue.js) | Core DAG scheduler: enqueue tasks with `dependsOn`, dispatch them in dependency order |
 | [`skill-monitoring.js`](./skill-monitoring.js) | SkillMonitor 7-step loop: record runs, detect degradation, generate repair proposals |
 | [`full-pipeline.js`](./full-pipeline.js) | All three modules in a closed loop: change detection → task queue → quality monitoring |
+
+### Framework Integration Guides
+
+| File | Framework |
+|------|-----------|
+| [`claude-code-integration.md`](./claude-code-integration.md) | Claude Code / Codex — add to CLAUDE.md, auto-record after tasks |
+| [`langchain-integration.md`](./langchain-integration.md) | LangChain / LangGraph — callback handler, tool wrapping, direct JSONL |
+| [`crewai-integration.md`](./crewai-integration.md) | CrewAI — per-agent tracking, tool-level recording, self-healing |
 
 ---
 
