@@ -72,6 +72,33 @@ npx agent-skill-bus record-run --agent claude --skill <skill-name> --task "<task
 
 That's it. The self-improving loop runs automatically.
 
+## Dashboard
+
+Get a real-time overview of all your agent skills with a single command:
+
+```bash
+npx agent-skill-bus dashboard
+```
+
+```
+╔══════════════════════════════════════════════════════════╗
+║              🚌 Agent Skill Bus Dashboard               ║
+╚══════════════════════════════════════════════════════════╝
+
+📊 Queue: 3 queued │ 1 running │ 12 completed │ 0 failed
+
+ Status   Skill               Score  Trend  Health
+─────────────────────────────────────────────────────────
+ ● ALERT  api-caller           0.42   ↓     ██░░░░░░░░░░
+ ● OK     code-review          0.95   ↑     ███████████░
+ ● OK     deploy-pipeline      0.88   ─     ██████████░░
+
+⚠ Flagged Skills:
+  api-caller — score_drop: dropped from 0.91 to 0.42 (drift: -53.8%)
+```
+
+Options: `--days N` (default: 7), `--no-color` for CI/piping.
+
 ## Modules
 
 ### 📬 Prompt Request Bus
