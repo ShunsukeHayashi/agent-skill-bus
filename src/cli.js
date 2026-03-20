@@ -239,7 +239,7 @@ switch (command) {
   }
 
   default:
-    console.log(`Agent Skill Bus v1.1.0
+    console.log(`Agent Skill Bus v1.2.0
 
 Usage: skill-bus <command> [options]
        npx agent-skill-bus <command> [options]
