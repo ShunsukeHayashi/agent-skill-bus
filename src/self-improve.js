@@ -91,7 +91,7 @@ export class SkillMonitor {
         trend,
         lastFail: s.lastFail,
         consecutiveFails: s.consecutiveFails,
-        flagged: avgScore < 0.7 || trend === 'declining' || trend === 'broken',
+        flagged: avgScore < 0.8 || trend === 'declining' || trend === 'broken',
       };
     }
 

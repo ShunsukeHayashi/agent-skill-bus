@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  note-publisher LaunchAgent — 毎週火曜日 09:00 に週次まとめ記事を自動投稿する
+
+  インストール:
+    cp skills/note-publisher/weekly-schedule.plist \
+       ~/Library/LaunchAgents/jp.miyabi-ai.note-publisher.plist
+    launchctl load ~/Library/LaunchAgents/jp.miyabi-ai.note-publisher.plist
+
+  アンインストール:
+    launchctl unload ~/Library/LaunchAgents/jp.miyabi-ai.note-publisher.plist
+
+  手動実行テスト:
+    launchctl start jp.miyabi-ai.note-publisher
+
+  ログ確認:
+    tail -f /tmp/note-publisher.log
+    tail -f /tmp/note-publisher.err
+-->
+<plist version="1.0">
+<dict>
+  <!-- ジョブ識別子 -->
+  <key>Label</key>
+  <string>jp.miyabi-ai.note-publisher</string>
+
+  <!-- 実行コマンド: last30days取得 → 記事変換 → note.com 投稿 -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string><![CDATA[
+      set -euo pipefail
+      cd "${HOME}/projects/agent-skill-bus"
+
+      # 環境変数を安全に読み込む（NOTE_SESSION 等）
+      if [ -f .env ]; then
+        set -a
+        # shellcheck disable=SC1091
+        . .env
+        set +a
+      fi
+
+      # Step 1: last30days JSON 取得
+      last30days --json > /tmp/last30days-output.json
+
+      # Step 2 & 3: 記事変換 → note.com 投稿
+      node scripts/publish-to-note.js \
+        --input /tmp/last30days-output.json \
+        --template skills/note-publisher/article-template.md \
+        --log skills/note-publisher/publish-log.jsonl
+
+      # Step 4: 実行結果を skill-bus に記録
+      npx agent-skill-bus record-run \
+        --agent note-publisher \
+        --skill note-publisher \
+        --task "週次まとめ記事投稿 $(date +%Y-%m-%d)" \
+        --result success \
+        --score 1.0
+    ]]></string>
+  </array>
+
+  <!-- 毎週火曜日 09:00 に実行 (Weekday: 0=日, 1=月, 2=火) -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>2</integer>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <!-- 標準出力ログ -->
+  <key>StandardOutPath</key>
+  <string>/tmp/note-publisher.log</string>
+
+  <!-- 標準エラーログ -->
+  <key>StandardErrorPath</key>
+  <string>/tmp/note-publisher.err</string>
+
+  <!-- 実行失敗時に再試行しない（翌週に再実行） -->
+  <key>LaunchOnlyOnce</key>
+  <false/>
+
+  <!-- macOS スリープ中にスキップされた場合、起動後すぐに実行 -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- タイムアウト: 30分 -->
+  <key>TimeOut</key>
+  <integer>1800</integer>
+
+  <!-- 環境変数 -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    <key>NODE_ENV</key>
+    <string>production</string>
+  </dict>
+</dict>
+</plist>
