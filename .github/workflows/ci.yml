@@ -2,28 +2,160 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   pull_request:
-    branches: [master]
+    branches: [master, main]
 
 jobs:
-  test:
+  # ─────────────────────────────────────────────
+  # 1. テスト（Type Check 相当）
+  # ─────────────────────────────────────────────
+  typecheck:
+    name: Type Check
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [22, 24]
-
+    outputs:
+      error_log: ${{ steps.run.outputs.error_log }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
-
+          node-version: '22'
       - name: Install dependencies
         run: npm install --no-package-lock
+      - id: run
+        name: Run tests
+        run: |
+          if ! node --test src/queue.test.js src/self-improve.test.js 2>&1 | tee /tmp/test.log; then
+            {
+              echo 'error_log<<DELIM'
+              grep -E "FAIL|Error|error:" /tmp/test.log | head -30
+              echo 'DELIM'
+            } >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
 
-      - name: Run tests
-        run: node --test src/queue.test.js src/self-improve.test.js
+  # ─────────────────────────────────────────────
+  # 2. 構文チェック（Build Check 相当）
+  # ─────────────────────────────────────────────
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    outputs:
+      error_log: ${{ steps.run.outputs.error_log }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - id: run
+        name: Check syntax
+        run: |
+          if ! node --check src/index.js src/cli.js 2>&1 | tee /tmp/build.log; then
+            {
+              echo 'error_log<<DELIM'
+              grep -E "SyntaxError|Error:" /tmp/build.log | head -30
+              echo 'DELIM'
+            } >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+  # ─────────────────────────────────────────────
+  # 3. CI 失敗 → Issue 自動作成 → Copilot へディスパッチ
+  # ─────────────────────────────────────────────
+  notify-failure:
+    name: Auto-fix Dispatch
+    runs-on: ubuntu-latest
+    needs: [typecheck, build]
+    if: |
+      always() &&
+      (needs.typecheck.result == 'failure' || needs.build.result == 'failure')
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Create Issue and assign to Copilot
+        id: create_issue
+        uses: actions/github-script@v7
+        env:
+          TYPECHECK_ERROR:  ${{ needs.typecheck.outputs.error_log }}
+          BUILD_ERROR:      ${{ needs.build.outputs.error_log }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          BUILD_RESULT:     ${{ needs.build.result }}
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const sha7   = context.sha.slice(0, 7);
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const failed = [];
+            if (process.env.TYPECHECK_RESULT === 'failure') {
+              failed.push({ job: 'Type Check',  log: process.env.TYPECHECK_ERROR });
+            }
+            if (process.env.BUILD_RESULT === 'failure') {
+              failed.push({ job: 'Build Check', log: process.env.BUILD_ERROR });
+            }
+
+            const errorSections = failed.map(f => [
+              `### ❌ ${f.job}`,
+              '```',
+              (f.log || '').trim() || '(ログ取得不可 — 下記 Actions Run URL を参照)',
+              '```',
+            ].join('\n')).join('\n\n');
+
+            const body = [
+              '## CI 自動修正依頼',
+              '',
+              '> このIssueはCI失敗を検知して自動作成されました。',
+              '> Copilot Coding Agent が修正PRを作成します。',
+              '',
+              '| 項目 | 値 |',
+              '|------|-----|',
+              `| ブランチ | \`${branch}\` |`,
+              `| コミット | \`${sha7}\` |`,
+              `| 実行ログ | [Actions Run](${runUrl}) |`,
+              '',
+              '## エラー詳細',
+              '',
+              errorSections,
+              '',
+              '## 修正方針（Copilot への指示）',
+              '1. 上記エラーを修正してください',
+              '2. `npm install --no-package-lock && node --check src/index.js src/cli.js` が通ることを確認',
+              '3. `node --test src/queue.test.js src/self-improve.test.js` が通ることを確認',
+              '4. 修正PRを作成してください',
+            ].join('\n');
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              labels: 'ci-failure',
+              state:  'open',
+            });
+            const dup = existing.data.find(i =>
+              i.title.includes('[CI Failure]') && i.title.includes(branch)
+            );
+
+            let issueNumber;
+            if (dup) {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: dup.number,
+                body: `## 再発 (${sha7})\n\n${errorSections}\n\n[実行ログ](${runUrl})`,
+              });
+              issueNumber = dup.number;
+              console.log(`Updated existing issue #${dup.number}`);
+            } else {
+              const issue = await github.rest.issues.create({
+                owner:     context.repo.owner,
+                repo:      context.repo.repo,
+                title:     `[CI Failure] ${context.workflow} — ${branch} (${sha7})`,
+                body,
+                labels:    ['ci-failure', 'bug', 'copilot'],
+                assignees: ['Copilot'],
+              });
+              issueNumber = issue.data.number;
+              console.log(`Created issue #${issueNumber}: ${issue.data.html_url}`);
+              core.setOutput('issue_number', String(issueNumber));
+              core.setOutput('issue_url', issue.data.html_url);
+            }
