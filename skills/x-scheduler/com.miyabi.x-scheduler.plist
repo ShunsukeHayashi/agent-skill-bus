@@ -1,150 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!--
-  com.miyabi.x-scheduler.plist
-  ─────────────────────────────────────────────────────────────────────────────
-  macOS LaunchAgent for the X Auto-Posting Scheduler skill.
-
-  INSTALL
-  ───────
-  1. Edit the paths below (<YOUR_PROJECT_ROOT> and <YOUR_LOG_DIR>).
-  2. Copy to ~/Library/LaunchAgents/
-       cp com.miyabi.x-scheduler.plist ~/Library/LaunchAgents/
-  3. Load the agent:
-       launchctl load ~/Library/LaunchAgents/com.miyabi.x-scheduler.plist
-  4. To unload:
-       launchctl unload ~/Library/LaunchAgents/com.miyabi.x-scheduler.plist
-
-  WHAT IT DOES
-  ────────────
-  • 06:45 JST (= 21:45 UTC)  — generate today's 5 posts via sns-creator
-  • 22:00 JST (= 13:00 UTC)  — post slot 5 (フォロー誘導型) via x-ops
-  • 12:00 JST (= 03:00 UTC)  — post slot 2 (実用型) via x-ops
-  • 10:00 JST (= 01:00 UTC)  — post slot 1 (バズネタ型) via x-ops
-    (Slots 1–5 are dispatched by the wrapper script at their scheduled times.)
-
-  The simplest approach is one LaunchAgent that calls a wrapper shell script at
-  06:45 JST and lets the script sleep until each posting window opens.
-
-  NOTES
-  ─────
-  • StartCalendarInterval fires at the specified local time (UTC here — adjust
-    Hour values to match your system timezone or set TZ in EnvironmentVariables).
-  • Set TWITTER_API_KEY etc. in EnvironmentVariables (never in source control).
-  • Logs go to <YOUR_LOG_DIR>/x-scheduler-{stdout,stderr}.log
--->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-
-  <!-- ── Identity ─────────────────────────────────────────────────── -->
-  <key>Label</key>
-  <string>com.miyabi.x-scheduler</string>
-
-  <!-- ── Program ──────────────────────────────────────────────────── -->
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/bash</string>
-    <string><YOUR_PROJECT_ROOT>/skills/x-scheduler/run-daily.sh</string>
-  </array>
-
-  <!-- ── Working directory ────────────────────────────────────────── -->
-  <key>WorkingDirectory</key>
-  <string><YOUR_PROJECT_ROOT></string>
-
-  <!-- ── Environment variables (credentials never in source control) -->
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>TWITTER_API_KEY</key>
-    <string><!-- set via: launchctl setenv TWITTER_API_KEY ... --></string>
-    <key>TWITTER_API_SECRET</key>
-    <string><!-- set via: launchctl setenv TWITTER_API_SECRET ... --></string>
-    <key>TWITTER_ACCESS_TOKEN</key>
-    <string><!-- set via: launchctl setenv TWITTER_ACCESS_TOKEN ... --></string>
-    <key>TWITTER_ACCESS_TOKEN_SECRET</key>
-    <string><!-- set via: launchctl setenv TWITTER_ACCESS_TOKEN_SECRET ... --></string>
-    <key>PATH</key>
-    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
-    <key>NODE_ENV</key>
-    <string>production</string>
-  </dict>
-
-  <!--
-    ── Schedule ───────────────────────────────────────────────────────
-    Fire at 06:45 JST = 21:45 UTC the previous calendar day.
-    (Adjust Hour/Minute if your macOS system clock is set to JST.)
-
-    Weekdays only: Monday(2)–Friday(6) in LaunchAgent Weekday numbering
-    (0=Sunday, 1=Monday … 6=Saturday).
-
-    Five StartCalendarInterval entries:
-      21:45 UTC = generation step (sns-creator)
-      22:00 UTC = slot 1  07:00 JST  バズネタ型
-      03:00 UTC = slot 2  12:00 JST  実用型        (next calendar day UTC)
-      10:00 UTC = slot 3  19:00 JST  感情訴求型
-      12:00 UTC = slot 4  21:00 JST  逆張り型
-      13:00 UTC = slot 5  22:00 JST  フォロー誘導型
-
-    Because LaunchAgent cannot cross midnight within one definition, the
-    recommended pattern is a single 06:45 JST entry that calls a wrapper
-    script; the script backgrounds each posting command with the correct delay.
-  -->
-  <key>StartCalendarInterval</key>
-  <array>
-    <!-- 06:45 JST daily — trigger full pipeline (weekdays) -->
+    <key>Label</key>
+    <string>com.miyabi.x-scheduler</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>source ~/.config/last30days/.env && last30days "AI agents autonomous 2026" --quick --json > /tmp/x-research.json && openclaw agent message sns-creator "以下のトレンドから投稿5本生成: " && npx agent-skill-bus record-run --agent sns-creator --skill x-scheduler --task "daily-auto" --result success --score 0.9</string>
+    </array>
+    <key>StartCalendarInterval</key>
     <dict>
-      <key>Hour</key>
-      <integer>21</integer>
-      <key>Minute</key>
-      <integer>45</integer>
-      <key>Weekday</key>
-      <integer>1</integer><!-- Monday UTC = Tuesday 06:45 JST -->
+        <key>Hour</key>
+        <integer>6</integer>
+        <key>Minute</key>
+        <integer>30</integer>
     </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/x-scheduler.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/x-scheduler.err</string>
+    <key>EnvironmentVariables</key>
     <dict>
-      <key>Hour</key>
-      <integer>21</integer>
-      <key>Minute</key>
-      <integer>45</integer>
-      <key>Weekday</key>
-      <integer>2</integer>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
     </dict>
-    <dict>
-      <key>Hour</key>
-      <integer>21</integer>
-      <key>Minute</key>
-      <integer>45</integer>
-      <key>Weekday</key>
-      <integer>3</integer>
-    </dict>
-    <dict>
-      <key>Hour</key>
-      <integer>21</integer>
-      <key>Minute</key>
-      <integer>45</integer>
-      <key>Weekday</key>
-      <integer>4</integer>
-    </dict>
-    <dict>
-      <key>Hour</key>
-      <integer>21</integer>
-      <key>Minute</key>
-      <integer>45</integer>
-      <key>Weekday</key>
-      <integer>5</integer>
-    </dict>
-  </array>
-
-  <!-- ── Logging ───────────────────────────────────────────────────── -->
-  <key>StandardOutPath</key>
-  <string><YOUR_LOG_DIR>/x-scheduler-stdout.log</string>
-  <key>StandardErrorPath</key>
-  <string><YOUR_LOG_DIR>/x-scheduler-stderr.log</string>
-
-  <!-- ── Behaviour ────────────────────────────────────────────────── -->
-  <key>RunAtLoad</key>
-  <false/>
-  <key>KeepAlive</key>
-  <false/>
-
 </dict>
 </plist>

@@ -1,243 +1,113 @@
+---
+name: x-scheduler
+description: last30days トレンドからX(Twitter)投稿5本を自動生成・最適時間帯に投稿。OpenClaw sns-creator + x-ops連携。Triggers: x投稿, twitter, X自動投稿, SNS自動化
+triggers:
+  - x-scheduler
+  - x投稿
+  - X自動投稿
+  - SNS自動化
+---
+
 # X Auto-Posting Scheduler
 
-## Description
-Generates and schedules 5 X (Twitter) posts per day from `last30days` trend data.
-The pipeline fetches trending topics, generates 5 post variants via OpenClaw `sns-creator`,
-and dispatches them at optimal times via OpenClaw `x-ops`.
+**Version**: 1.0.0
+**Last Updated**: 2026-03-26
 
-Post history is recorded in `skill-runs.jsonl` in this directory so the
-Self-Improving Skills loop can track quality over time.
+## Description
+
+last30days のトレンドデータから X(Twitter) 投稿5本を自動生成し、最適時間帯にスケジュール投稿するスキル。
+OpenClaw sns-creator（投稿生成）× x-ops（実際の投稿）で完全自動化。
 
 ## Pipeline
 
 ```
-last30days --json
-    │
-    ▼
-sns-creator (OpenClaw index 29, MainMini)
-    │  Generate 5 posts from trend JSON
-    ▼
-post-queue.jsonl  ─── scheduler ───▶  x-ops (OpenClaw index 12, Windows Gateway)
-                                            │
-                                            ▼
-                                     skill-runs.jsonl
+last30days --json → sns-creator で5投稿生成 → x-ops で最適時間帯に自動投稿
 ```
-
-## Optimal Posting Times (JST, weekdays)
-
-| Slot | Time  | Post type (recommended) |
-|------|-------|-------------------------|
-| 1    | 07:00 | バズネタ型 (buzz)        |
-| 2    | 12:00 | 実用型 (practical)       |
-| 3    | 19:00 | 感情訴求型 (emotional)   |
-| 4    | 21:00 | 逆張り型 (contrarian)    |
-| 5    | 22:00 | フォロー誘導型 (follow)  |
 
 ## 5-Post Templates
 
-### Template 1 — バズネタ型 (Buzz)
-> 英語圏の高インプレ話題を日本語要約
-- Expected impressions: 5,000–15,000
-- Hook: 数字・驚き・意外性
-- Structure: `【速報】{topic} が話題に。\n{summary}\n{cta}`
-- Hashtags: `#{topic_tag} #AI #テクノロジー`
+| # | タイプ | 内容 | 予測インプレ |
+|---|--------|------|-------------|
+| 1 | バズネタ | 英語圏高インプレ話題を日本語要約 | 5,000〜15,000 |
+| 2 | 逆張り | 話題への別視点・批評的考察 | 3,000〜10,000 |
+| 3 | 実用 | ツール・手法の紹介（3選形式） | 2,000〜8,000 |
+| 4 | 感情訴求 | ストーリー仕立て・共感型 | 3,000〜12,000 |
+| 5 | フォロー誘導 | 日本語圏先取り情報 | 1,000〜5,000 |
 
-### Template 2 — 逆張り型 (Contrarian)
-> 話題に対する別視点・反論
-- Expected impressions: 3,000–10,000
-- Hook: 「〜は間違っている」「実は〜」
-- Structure: `「{popular_opinion}」という意見が広がっているが、実は…\n{counterpoint}\n{evidence}`
-- Hashtags: `#{topic_tag} #考察`
+## Optimal Posting Times
 
-### Template 3 — 実用型 (Practical)
-> ツール・手法の具体的な紹介
-- Expected impressions: 2,000–8,000
-- Hook: 「〜の使い方」「〜で解決」
-- Structure: `{tool_name} でできること:\n✅ {point1}\n✅ {point2}\n✅ {point3}\n👇 詳細スレッド`
-- Hashtags: `#{tool_tag} #便利ツール #エンジニア`
+| 時刻 | 投稿タイプ | 理由 |
+|------|-----------|------|
+| 07:00 | フォロー誘導 | 朝の情報収集タイム |
+| 12:00 | 実用 | 昼休みの学習タイム |
+| 19:00 | 感情訴求 | 帰宅後リラックスタイム |
+| 21:00 | バズネタ | プライムタイム |
+| 22:00 | 逆張り | 夜の考察タイム |
 
-### Template 4 — 感情訴求型 (Emotional)
-> ストーリー仕立て・共感を呼ぶ
-- Expected impressions: 3,000–12,000
-- Hook: 体験談・Before/After
-- Structure: `{time_ago}、{situation}。\n{turning_point}。\n今は{outcome}。\n同じ悩みがある人へ→`
-- Hashtags: `#{emotion_tag} #体験談`
-
-### Template 5 — フォロー誘導型 (Follow)
-> 日本語圏への先取り情報提供
-- Expected impressions: 1,000–5,000
-- Hook: 「日本語でまとめました」「まだ知らない人が多い」
-- Structure: `海外で話題の{topic}、日本語でまとめました🧵\n{summary}\nフォローすると毎日届きます→`
-- Hashtags: `#{topic_tag} #まとめ #フォロー`
-
-## Step-by-Step Procedure
-
-### Step 1: Fetch Trend Data
+## Invoke
 
 ```bash
-# Generate trend JSON for the last 30 days (adapt to your data source)
-npx agent-skill-bus record-run \
-  --agent x-scheduler \
-  --skill last30days \
-  --task "fetch trend data" \
-  --result success \
-  --score 1.0
+# 1. リサーチ実行
+last30days "AI agents autonomous 2026" --quick --json > /tmp/x-research.json
+
+# 2. OpenClaw sns-creator で5投稿生成（MainMini）
+openclaw agent message sns-creator "以下のトレンドデータから投稿5本を生成。5つのテンプレート（バズネタ/逆張り/実用/感情/フォロー誘導）に従って日本語で。"
+
+# 3. OpenClaw x-ops で投稿（Windows Gateway - xurl必須）
+openclaw agent message x-ops "上記5本の投稿を最適時間帯（07:00/12:00/19:00/21:00/22:00）にスケジュール投稿"
+
+# 4. 投稿履歴記録
+npx agent-skill-bus record-run --agent sns-creator --skill x-scheduler --task "daily-5posts" --result success --score 0.9
 ```
 
-Save output to `/tmp/trends-$(date +%Y%m%d).json`.
+## OpenClaw Agent Assignment
 
-### Step 2: Generate 5 Posts via OpenClaw sns-creator
+| 役割 | エージェント | Index | ノード | 備考 |
+|------|-------------|-------|--------|------|
+| トレンド分析 | sns-analytics (31) | 31 | MacBook Pro | last30days実行 |
+| SNS戦略 | sns-strategist (28) | 28 | MainMini | 投稿方針決定 |
+| 投稿生成 | sns-creator (29) | 29 | MainMini | 5本生成 |
+| X投稿実行 | x-ops (12) | 12 | Windows Gateway | xurl必須 |
 
-Dispatch to OpenClaw agent **index 29** (sns-creator, MainMini):
+## Direct OpenClaw Commands
 
-```
-@sns-creator
-Input: /tmp/trends-YYYYMMDD.json
-Task: Generate 5 X posts using the templates below.
-Output format: JSONL, one post object per line, written to /tmp/posts-YYYYMMDD.jsonl
+```bash
+# sns-analytics にリサーチ依頼
+openclaw agent message sns-analytics "last30days 'AI agents 2026' --quick --json を実行して結果をTelegramに送信"
 
-Post object schema:
-{"slot":1,"template":"buzz","text":"...","hashtags":["..."],"scheduled_jst":"07:00"}
-{"slot":2,"template":"contrarian","text":"...","hashtags":["..."],"scheduled_jst":"12:00"}
-{"slot":3,"template":"practical","text":"...","hashtags":["..."],"scheduled_jst":"19:00"}
-{"slot":4,"template":"emotional","text":"...","hashtags":["..."],"scheduled_jst":"21:00"}
-{"slot":5,"template":"follow","text":"...","hashtags":["..."],"scheduled_jst":"22:00"}
+# sns-creator に投稿生成依頼
+openclaw agent message sns-creator "[TASK] 今日のトレンドから投稿5本生成。テンプレート: バズネタ/逆張り/実用/感情訴求/フォロー誘導"
 
-Templates:
-1. バズネタ型: 英語圏の高インプレ話題を日本語要約（予測5,000〜15,000インプレ）
-2. 逆張り型: 話題に対する別視点（予測3,000〜10,000インプレ）
-3. 実用型: ツール・手法の紹介（予測2,000〜8,000インプレ）
-4. 感情訴求型: ストーリー仕立て（予測3,000〜12,000インプレ）
-5. フォロー誘導型: 日本語圏先取り情報（予測1,000〜5,000インプレ）
-
-Constraints:
-- Each post ≤ 280 characters (Twitter counts all characters equally, regardless of language)
-- Include 1–3 hashtags per post
-- No duplicate topics across the 5 posts
+# x-ops に投稿指示（Windows Gateway ローカル実行必須）
+openclaw agent message x-ops "[TASK] 以下の5投稿をスケジュール投稿: {投稿リスト}"
 ```
 
-Append generated posts to `post-queue.jsonl` in this skill directory.
-
-### Step 3: Post via OpenClaw x-ops
-
-At each scheduled time, dispatch to OpenClaw agent **index 12** (x-ops, Windows Gateway):
-
-```
-@x-ops
-Task: Post the following tweet using twitter-api-v2.
-Text: {post.text} {post.hashtags joined by space}
-After posting, report: tweet_id, impressions_estimate, posted_at (ISO 8601 UTC)
-```
-
-#### twitter-api-v2 integration
-
-`x-ops` uses the `twitter-api-v2` Node.js library. Ensure the following environment
-variables are set on the Windows Gateway host:
-
-```
-TWITTER_API_KEY=...
-TWITTER_API_SECRET=...
-TWITTER_ACCESS_TOKEN=...
-TWITTER_ACCESS_TOKEN_SECRET=...
-```
-
-Minimal post command (run inside x-ops):
-
-```js
-import { TwitterApi } from 'twitter-api-v2';
-const client = new TwitterApi({
-  appKey: process.env.TWITTER_API_KEY,
-  appSecret: process.env.TWITTER_API_SECRET,
-  accessToken: process.env.TWITTER_ACCESS_TOKEN,
-  accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
-});
-const tweet = await client.v2.tweet(text);
-console.log(JSON.stringify({ tweet_id: tweet.data.id }));
-```
-
-### Step 4: Record Post History
-
-After each successful post, append one line to `skill-runs.jsonl` in **this directory**:
-
-```jsonl
-{"ts":"2026-03-25T07:00:00Z","agent":"x-ops","skill":"x-scheduler","task":"post slot 1 buzz","result":"success","score":1.0,"notes":"tweet_id=1234567890123456789 slot=1 template=buzz"}
-```
-
-Also append the full post record to `post-queue.jsonl` with `status` updated to `posted`:
-
-```jsonl
-{"date":"2026-03-25","slot":1,"template":"buzz","text":"...","hashtags":["..."],"scheduled_jst":"07:00","status":"posted","tweet_id":"1234567890123456789","posted_at":"2026-03-25T22:00:00Z"}
-```
-
-## Data Files
-
-### `post-queue.jsonl` — Daily Post Queue
-
-One JSON object per line, one line per scheduled post:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `date` | YYYY-MM-DD | Target posting date (JST) |
-| `slot` | 1–5 | Posting slot (1=07:00 … 5=22:00) |
-| `template` | string | Template name: `buzz`, `contrarian`, `practical`, `emotional`, `follow` |
-| `text` | string | Post body (without hashtags) |
-| `hashtags` | string[] | Hashtag strings including `#` |
-| `scheduled_jst` | HH:MM | Scheduled time in JST |
-| `status` | string | `queued`, `posted`, `failed`, `skipped` |
-| `tweet_id` | string\|null | Twitter tweet ID after posting |
-| `posted_at` | ISO 8601\|null | Actual UTC time posted |
-
-### `skill-runs.jsonl` — Execution Log
-
-Standard Agent Skill Bus format (compatible with Self-Improving Skills loop):
-
-```jsonl
-{"ts":"2026-03-25T07:00:00Z","agent":"x-ops","skill":"x-scheduler","task":"post slot 1 buzz","result":"success","score":1.0,"notes":"tweet_id=... slot=1 template=buzz"}
-{"ts":"2026-03-25T12:00:00Z","agent":"x-ops","skill":"x-scheduler","task":"post slot 2 practical","result":"success","score":1.0,"notes":"tweet_id=... slot=2 template=practical"}
-```
-
-## Prompt Request Bus Integration
-
-Queue the daily generation run via the Prompt Request Bus:
+## Post History Format (post-queue.jsonl)
 
 ```json
-{
-  "id": "pr-xsched-YYYYMMDD",
-  "ts": "2026-03-25T06:45:00Z",
-  "source": "cron",
-  "priority": "medium",
-  "agent": "sns-creator",
-  "task": "Generate 5 X posts from last30days trends for 2026-03-25",
-  "context": "Daily x-scheduler run. Trend data at /tmp/trends-20260325.json",
-  "affectedSkills": ["x-scheduler"],
-  "affectedFiles": ["agent-skill-bus:skills/x-scheduler/post-queue.jsonl"],
-  "deadline": "24h",
-  "status": "queued",
-  "dependsOn": [],
-  "dagId": "xsched-20260325"
-}
+{"id":"post-001","ts":"2026-03-26T07:00:00Z","type":"buzz","content":"投稿本文","scheduled":"07:00","status":"queued"}
+{"id":"post-002","ts":"2026-03-26T12:00:00Z","type":"practical","content":"投稿本文","scheduled":"12:00","status":"queued"}
 ```
 
-Then queue each posting slot as a dependent task:
+## Health Check
 
-```json
-{"id":"pr-xsched-20260325-s1","source":"dag","priority":"medium","agent":"x-ops","task":"Post X slot 1 (07:00 JST) for 2026-03-25","dependsOn":["pr-xsched-YYYYMMDD"],"dagId":"xsched-20260325","status":"queued"}
-{"id":"pr-xsched-20260325-s2","source":"dag","priority":"medium","agent":"x-ops","task":"Post X slot 2 (12:00 JST) for 2026-03-25","dependsOn":["pr-xsched-YYYYMMDD"],"dagId":"xsched-20260325","status":"queued"}
-{"id":"pr-xsched-20260325-s3","source":"dag","priority":"medium","agent":"x-ops","task":"Post X slot 3 (19:00 JST) for 2026-03-25","dependsOn":["pr-xsched-YYYYMMDD"],"dagId":"xsched-20260325","status":"queued"}
-{"id":"pr-xsched-20260325-s4","source":"dag","priority":"medium","agent":"x-ops","task":"Post X slot 4 (21:00 JST) for 2026-03-25","dependsOn":["pr-xsched-YYYYMMDD"],"dagId":"xsched-20260325","status":"queued"}
-{"id":"pr-xsched-20260325-s5","source":"dag","priority":"medium","agent":"x-ops","task":"Post X slot 5 (22:00 JST) for 2026-03-25","dependsOn":["pr-xsched-YYYYMMDD"],"dagId":"xsched-20260325","status":"queued"}
+```bash
+# 直近の投稿実績確認
+cat skills/x-scheduler/skill-runs.jsonl | tail -5
+
+# キュー確認
+cat skills/x-scheduler/post-queue.jsonl | tail -10
+
+# OpenClaw x-ops 疎通確認
+openclaw agent message x-ops "PING"
 ```
 
-## LaunchAgent (macOS)
+## Daily LaunchAgent
 
-See `com.miyabi.x-scheduler.plist` in this directory for a ready-to-use macOS
-LaunchAgent that runs the generation step at **06:45 JST** every weekday and
-triggers the posting pipeline at each scheduled slot.
+`skills/x-scheduler/com.miyabi.x-scheduler.plist` を参照。
 
-## Safety Constraints
-
-- **Rate limits**: Twitter API v2 Free tier allows 17 tweets/24 h per app. Keep 5 posts/day well within limits.
-- **Duplicate guard**: Before posting, check `post-queue.jsonl` for `tweet_id != null` on the same `date+slot` to avoid double-posting.
-- **Max retries**: 2 retries on `5xx` errors with 60-second back-off; mark as `failed` after that.
-- **Human review**: Any post with `score < 0.6` in the previous day's `skill-runs.jsonl` triggers a Prompt Request to human reviewer before the next day's run.
-- **No secrets in files**: API credentials are environment variables only; never written to JSONL files.
+```bash
+# インストール
+cp skills/x-scheduler/com.miyabi.x-scheduler.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.miyabi.x-scheduler.plist
+```
