@@ -13,3 +13,12 @@ node_modules/
 
 # Keep empty JSONL data files tracked but ignore user data
 # (data files are intentionally empty in the repo)
+
+# Local Claude Code configuration
+.claude/
+
+# GitNexus generated index
+.gitnexus/
+
+# PDF files (business documents)
+*.pdf
