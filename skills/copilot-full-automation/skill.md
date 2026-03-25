@@ -79,15 +79,15 @@ CI が失敗すると `ci.yml` の `notify-failure` ジョブが自動的に：
 
 | Secret 名 | 説明 |
 |-----------|------|
-| `ANTHROPIC_API_KEY` | Claude Opus 4.6 用（メイントークン） |
-| `ANTHROPIC_API_KEY_2` | レートリミット時のフォールバック |
-| `ANTHROPIC_API_KEY_3` | 3つ目のフォールバック |
+| `CLAUDE_CODE_TOKEN` | Claude Opus 4.6 用（メイントークン） |
+| `CLAUDE_CODE_TOKEN_2` | レートリミット時のフォールバック |
+| `CLAUDE_CODE_TOKEN_3` | 3つ目のフォールバック |
 
 設定方法:
 ```bash
-gh secret set ANTHROPIC_API_KEY --repo ShunsukeHayashi/agent-skill-bus
-gh secret set ANTHROPIC_API_KEY_2 --repo ShunsukeHayashi/agent-skill-bus
-gh secret set ANTHROPIC_API_KEY_3 --repo ShunsukeHayashi/agent-skill-bus
+gh secret set CLAUDE_CODE_TOKEN --repo ShunsukeHayashi/agent-skill-bus
+gh secret set CLAUDE_CODE_TOKEN_2 --repo ShunsukeHayashi/agent-skill-bus
+gh secret set CLAUDE_CODE_TOKEN_3 --repo ShunsukeHayashi/agent-skill-bus
 ```
 
 ## 必須 GitHub ラベル

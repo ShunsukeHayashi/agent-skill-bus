@@ -56,9 +56,9 @@ jobs:
       - name: Run AI Review
         id: review
         env:
-          CLAUDE_CODE_OAUTH_TOKEN_1: ${{ secrets.ANTHROPIC_API_KEY }}
-          CLAUDE_CODE_OAUTH_TOKEN_2: ${{ secrets.ANTHROPIC_API_KEY_2 }}
-          CLAUDE_CODE_OAUTH_TOKEN_3: ${{ secrets.ANTHROPIC_API_KEY_3 }}
+          CLAUDE_CODE_OAUTH_TOKEN_1: ${{ secrets.CLAUDE_CODE_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN_2: ${{ secrets.CLAUDE_CODE_TOKEN_2 }}
+          CLAUDE_CODE_OAUTH_TOKEN_3: ${{ secrets.CLAUDE_CODE_TOKEN_3 }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE:  ${{ github.event.pull_request.title }}
           PR_BRANCH: ${{ github.event.pull_request.head.ref }}
