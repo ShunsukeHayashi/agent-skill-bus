@@ -1,0 +1,62 @@
+name: Copilot Task
+description: GitHub Copilot Coding Agent に実装を依頼するタスク
+title: "feat: "
+labels: ["copilot"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **重要**: このテンプレートで作成した Issue は Copilot Coding Agent が自動実装します。
+        > **実行可能なコードファイル**（`.js` `.ts` `.py` `.sh` 等）を必ず含む実装が必要です。
+        > ドキュメント（`.md`）のみの PR は自動的に REQUEST_CHANGES となります。
+
+  - type: textarea
+    id: what
+    attributes:
+      label: "実装内容"
+      description: "何を実装するか 1〜3 文で説明してください"
+      placeholder: "例: src/utils/format.ts に金額フォーマット関数を追加する"
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "受け入れ条件（Acceptance Criteria）"
+      description: "完了とみなせる条件をチェックボックスで列挙してください"
+      value: |
+        - [ ] 指定のコードファイルが存在し、動作する実装が含まれている
+        - [ ] 新しい関数・クラスにはユニットテストが追加されている
+        - [ ] `npm test` または `cargo test` 等が通る
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: "変更対象ファイル（Expected output files）"
+      description: "Copilot が作成・変更すべきファイルパスを明記してください"
+      placeholder: |
+        - src/utils/format.ts  — 金額フォーマット関数の実装
+        - src/utils/format.test.ts  — ユニットテスト
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "補足コンテキスト（任意）"
+      description: "技術スタック・既存コードとの関係・制約などがあれば記入してください"
+      placeholder: "例: TypeScript strict mode, Vitest を使用, 既存の formatCurrency 関数を参考に"
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "投稿前チェックリスト"
+      options:
+        - label: "実装対象のコードファイルパスを記入した"
+          required: true
+        - label: "受け入れ条件は客観的にテスト可能である"
+          required: true
+        - label: ".md ドキュメントの作成のみを求めていない"
+          required: true
