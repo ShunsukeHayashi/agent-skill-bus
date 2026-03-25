@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.miyabi.note-publisher</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>cd /Users/shunsukehayashi/dev/tools/agent-skill-bus && source ~/.config/last30days/.env && last30days "AI agents autonomous 2026" --deep --json > /tmp/note-research.json && openclaw agent message writer "以下のJSONから2500字のnote記事を生成: $(cat /tmp/note-research.json | head -200)" && npx agent-skill-bus record-run --agent writer --skill note-publisher --task "weekly-auto" --result success --score 0.9</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>2</integer>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/note-publisher.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/note-publisher.err</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>

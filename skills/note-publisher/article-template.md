@@ -1,37 +1,54 @@
-# 【週次まとめ】{{YEAR_MONTH}}W{{WEEK_NUM}} AI・テックハイライト
+# {{TITLE}}
 
-{{LEAD_TEXT}}
-
----
-
-## 🏆 今週のハイライト3選
-
-{{HIGHLIGHTS}}
+> {{LEAD_SENTENCE}}
 
 ---
 
-## 📈 技術トレンド
+## 今週のハイライト3選
 
-{{TRENDS}}
+### 1. {{HIGHLIGHT_1_TITLE}}
 
----
+{{HIGHLIGHT_1_CONTENT}}
 
-## 💼 ビジネスインパクト
-
-{{BUSINESS_IMPACT}}
+**注目度**: {{HIGHLIGHT_1_SCORE}}点 | **ソース**: {{HIGHLIGHT_1_SOURCE}}
 
 ---
 
-## 🇯🇵 日本語圏への示唆
+### 2. {{HIGHLIGHT_2_TITLE}}
 
-{{JP_INSIGHTS}}
+{{HIGHLIGHT_2_CONTENT}}
 
----
-
-## まとめ
-
-{{SUMMARY}}
+**注目度**: {{HIGHLIGHT_2_SCORE}}点 | **ソース**: {{HIGHLIGHT_2_SOURCE}}
 
 ---
 
-{{HASHTAGS}}
+### 3. {{HIGHLIGHT_3_TITLE}}
+
+{{HIGHLIGHT_3_CONTENT}}
+
+**注目度**: {{HIGHLIGHT_3_SCORE}}点 | **ソース**: {{HIGHLIGHT_3_SOURCE}}
+
+---
+
+## 技術トレンド深掘り
+
+{{TECH_TREND_CONTENT}}
+
+---
+
+## ビジネスインパクト
+
+{{BUSINESS_IMPACT_CONTENT}}
+
+---
+
+## 日本語圏への示唆
+
+{{JAPANESE_INSIGHT}}
+
+---
+
+*このレポートは last30days × OpenClaw により自動生成されました。*
+*調査期間: {{DATE_RANGE}} | ソース数: {{SOURCE_COUNT}}件*
+
+#AI #生成AI #テック #週次まとめ #AIエージェント
