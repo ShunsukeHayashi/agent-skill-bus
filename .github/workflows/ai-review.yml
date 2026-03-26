@@ -1,9 +1,11 @@
 name: AI Code Review
 
-# Copilot が作成した PR を Claude Opus で自動レビュー。
+# Copilot が作成した PR を Claude Opus で自動レビュー
+#
 # APPROVE されたものだけ auto-merge.yml がマージする。
 # Claude Code CLI（claude --print）+ OAuth トークンローテーションで動作。
 # タスク1: CRITICAL 深刻度分岐を実装（WARNING のみ → APPROVE + コメント）
+# タスク2 (B4): DESIGN_CONSTRAINTS.md 読み込みステップを追加
 
 on:
   pull_request:
@@ -33,6 +35,18 @@ jobs:
       - name: Install claude CLI
         run: npm install -g @anthropic-ai/claude-code@latest
 
+      - name: Load Design Constraints
+        id: constraints
+        run: |
+          if [ -f DESIGN_CONSTRAINTS.md ]; then
+            CONSTRAINTS=$(cat DESIGN_CONSTRAINTS.md | head -100)
+          else
+            CONSTRAINTS="No design constraints found."
+          fi
+          echo "CONSTRAINTS<<EOFDC" >> $GITHUB_OUTPUT
+          echo "$CONSTRAINTS" >> $GITHUB_OUTPUT
+          echo "EOFDC" >> $GITHUB_OUTPUT
+
       - name: Get PR diff
         id: diff
         run: |
@@ -49,7 +63,7 @@ jobs:
           if [ -z "$CHANGED" ]; then
             echo "doc_only=false" >> $GITHUB_OUTPUT
           else
-            NON_MD=$(echo "$CHANGED" | grep -v '\.md$' | head -1)
+          NON_MD=$(echo "$CHANGED" | grep -v '\.md$' | head -1)
             if [ -z "$NON_MD" ]; then
               echo "doc_only=true" >> $GITHUB_OUTPUT
               echo "WARNING: PR contains only .md files — will auto-reject."
@@ -65,7 +79,7 @@ jobs:
           MAX = 18000
           truncated = len(diff) > MAX
           if truncated:
-              diff = diff[:MAX] + '\n...[diff truncated due to length]'
+             diff = diff[:MAX] + '\n...[diff truncated due to length]'
           with open('/tmp/pr.diff.limited', 'w') as f:
               f.write(diff)
           print('truncated=true' if truncated else 'truncated=false')
@@ -112,7 +126,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SYSTEM_PROMPT="You are a principal engineer performing an automated code review of a GitHub Pull Request created by Copilot Coding Agent. Evaluate the PR for: (1) correctness — does it fulfill the linked Issue requirements? (2) code quality — no dead code, no placeholder implementations; (3) security — no hardcoded secrets, proper input validation; (4) tests — new logic should have tests. Be strict. Only APPROVE if the PR is production-ready and contains real executable code. If the PR contains only .md documentation files with no code, immediately REQUEST_CHANGES."
+          SYSTEM_PROMPT="You are a principal engineer performing an automated code review of a GitHub Pull Request created by Copilot Coding Agent. Evaluate the PR for: (1) correctness — does it fulfill the linked Issue requirements? (2) code quality — no dead code, no placeholder implementations; (3) security — no hardcoded secrets, proper input validation; (4) tests — new logic should have tests. Be strict. Only APPROVE if the PR is production-ready and contains real executable code. If the PR contains only .md documentation files with no code, immediately REQUEST_CHANGES. PROJECT DESIGN CONSTRAINTS (you must follow these): ${{ steps.constraints.outputs.CONSTRAINTS }}"
 
           USER_PROMPT="PR #${PR_NUMBER}: ${PR_TITLE}
           Branch: ${PR_BRANCH}
@@ -221,7 +235,7 @@ jobs:
             const truncated = process.env.truncated === 'true';
             const pr = context.payload.pull_request;
 
-            // タスク1: WARNING のみの場合は APPROVE に変更
+            // タスク1: WARNING のみの場合は APPROVE に変換
             let event = verdict === 'APPROVE' ? 'APPROVE' : 'REQUEST_CHANGES';
             if (verdict === 'REQUEST_CHANGES' && severity === 'WARNING') {
               event = 'APPROVE';
