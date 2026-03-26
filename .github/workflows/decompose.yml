@@ -1,9 +1,10 @@
 name: Decompose Issue for Copilot
 
 # copilot ラベルが付いた Issue を Claude Opus で分析。
-# 粗粒度（vague / multi-part / doc-only になりそう）なら原子的サブタスクに分解して
+# 粗粒度（vague / multi-part / doc-only になりそう）なら原子的なサブタスクに分解して
 # GitHub Sub-issues API で子 Issue として親に紐づける（サブイシュー化）。
 # 粒度が適切（atomic）なら何もせず copilot-assign.yml に任せる。
+# タスク5 (B5): Context Sufficiency Check ステップを追加
 
 on:
   issues:
@@ -32,15 +33,100 @@ jobs:
             }));
             console.log(`Issue #${issue.number} written to /tmp/issue.json`);
 
+      - name: Context Sufficiency Check
+        id: context_check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+            const title = issue.title || '';
+            const combined = title + '\n' + body;
+            
+            // ファイルパス（拡張子）の検出
+            const codeFilePattern = /\.(ts|js|py|sh|sql|yml|yaml|json|go|rb|java|cpp|c|rs)\b/i;
+            const hasFilePath = codeFilePattern.test(combined);
+            
+            // DB/認証関連キーワード
+            const sensitivePattern = /\b(migration|oauth|webhook|auth|trigger|sql|database|schema|security|authentication|authorization)\b/i;
+            const hasSensitiveKeyword = sensitivePattern.test(combined);
+            
+            // DESIGN_CONSTRAINTS.md への言及
+            const hasConstraintRef = /DESIGN_CONSTRAINTS|design constraint|architecture constraint/i.test(combined);
+            
+            let issues = [];
+            let shouldWarn = false;
+            
+            // ルール1: コードファイルパスが含まれていない場合
+            if (!hasFilePath) {
+              issues.push('⚠️ **Missing file paths**: This issue does not mention any specific code files (`.ts`, `.js`, `.py`, `.sh`, etc.). Copilot needs concrete file paths to produce working code.');
+              shouldWarn = true;
+            }
+            
+            // ルール2: DB/認証関連で設計制約への言及がない場合
+            if (hasSensitiveKeyword && !hasConstraintRef) {
+              issues.push('⚠️ **Missing design constraints**: This issue involves database/auth/security work but does not reference `DESIGN_CONSTRAINTS.md` or architectural guidelines. Critical decisions may be made without proper guardrails.');
+              shouldWarn = true;
+            }
+            
+            core.setOutput('should_warn', shouldWarn.toString());
+            core.setOutput('issues', JSON.stringify(issues));
+            console.log(`Context check: should_warn=${shouldWarn}, issues=${issues.length}`);
+
+      - name: Warn and remove copilot label if context insufficient
+        if: steps.context_check.outputs.should_warn == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const issues = JSON.parse('${{ steps.context_check.outputs.issues }}');
+            
+            // copilot ラベルを除去
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              name: 'copilot'
+            }).catch(() => {});
+            
+            // 警告コメントを投稿
+            const body = [
+              '## ⚠️ Context Sufficiency Check Failed',
+              '',
+              'This issue does not provide enough context for Copilot Coding Agent to succeed. The `copilot` label has been removed.',
+              '',
+              '### Issues Detected',
+              ...issues.map(i => `- ${i}`),
+              '',
+              '### How to Fix',
+              '1. **Add specific file paths** (e.g., `src/auth.js`, `scripts/migrate.sh`) to the issue body',
+              '2. For database/auth/security work: reference `DESIGN_CONSTRAINTS.md` or include architectural guidelines',
+              '3. Re-add the `copilot` label after updating the issue',
+              '',
+              '_Automated by Context Sufficiency Check (decompose.yml)_'
+            ].join('\n');
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body
+            });
+            
+            core.setFailed('Context sufficiency check failed. Issue needs more details.');
+
       - name: Setup Node.js
+        if: steps.context_check.outputs.should_warn != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
       - name: Install Claude CLI
+        if: steps.context_check.outputs.should_warn != 'true'
         run: npm install -g @anthropic-ai/claude-code@latest
 
       - name: Analyze Issue with Claude Opus
+        if: steps.context_check.outputs.should_warn != 'true'
         id: analyze
         env:
           CLAUDE_CODE_OAUTH_TOKEN_1: ${{ secrets.CLAUDE_CODE_TOKEN }}
@@ -53,7 +139,7 @@ jobs:
           ISSUE_NUM=$(python3 -c "import json; print(json.load(open('issue.json'))['number'])")
           ISSUE_TITLE=$(python3 -c "import json; print(json.load(open('issue.json'))['title'])")
 
-          # Issue body を安全にファイルへ書き出してstdinでClaudeに渡す
+          # Issue body を完全にファイルへ書き出してstdinでClaudeに渡す
           python3 -c "import json; print(json.load(open('issue.json'))['body'])" > /tmp/issue_body.txt
 
           SYSTEM_PROMPT="You are a software engineering task decomposer. Given a GitHub Issue, classify it as atomic or coarse, then return ONLY valid JSON with no extra text or markdown fences."
