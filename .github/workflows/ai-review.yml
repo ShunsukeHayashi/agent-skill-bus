@@ -3,6 +3,7 @@ name: AI Code Review
 # Copilot が作成した PR を Claude Opus で自動レビュー。
 # APPROVE されたものだけ auto-merge.yml がマージする。
 # Claude Code CLI（claude --print）+ OAuth トークンローテーションで動作。
+# タスク1: CRITICAL 深刻度分岐を実装（WARNING のみ → APPROVE + コメント）
 
 on:
   pull_request:
@@ -189,6 +190,16 @@ jobs:
           echo "$REVIEW" > /tmp/review_output.txt
           echo "used_key=$USED_KEY" >> $GITHUB_OUTPUT
 
+          # タスク1: CRITICAL キーワード検出
+          CRITICAL_KEYWORDS="CRITICAL|security|auth|injection|SQL injection|authentication|authorization|vulnerability"
+          if echo "$REVIEW" | grep -qiE "$CRITICAL_KEYWORDS"; then
+            echo "severity=CRITICAL" >> $GITHUB_OUTPUT
+            echo "CRITICAL issue detected in review"
+          else
+            echo "severity=WARNING" >> $GITHUB_OUTPUT
+            echo "Only WARNING-level issues detected"
+          fi
+
           if echo "$REVIEW" | grep -q '\*\*\[APPROVE\]\*\*'; then
             echo "verdict=APPROVE" >> $GITHUB_OUTPUT
           else
@@ -205,19 +216,28 @@ jobs:
             const fs = require('fs');
             const review = fs.readFileSync('/tmp/review_output.txt', 'utf8');
             const verdict = '${{ steps.review.outputs.verdict }}';
+            const severity = '${{ steps.review.outputs.severity }}';
             const usedKey = '${{ steps.review.outputs.used_key }}';
             const truncated = process.env.truncated === 'true';
             const pr = context.payload.pull_request;
 
-            const event = verdict === 'APPROVE' ? 'APPROVE' : 'REQUEST_CHANGES';
+            // タスク1: WARNING のみの場合は APPROVE に変更
+            let event = verdict === 'APPROVE' ? 'APPROVE' : 'REQUEST_CHANGES';
+            if (verdict === 'REQUEST_CHANGES' && severity === 'WARNING') {
+              event = 'APPROVE';
+              console.log('Severity is WARNING-only, converting REQUEST_CHANGES to APPROVE with comments');
+            }
 
             const body = [
               '## AI Code Review -- Claude Opus 4.6 (via Claude Code CLI)',
               '',
+              severity === 'WARNING' && verdict === 'REQUEST_CHANGES' 
+                ? '**Status**: ✅ APPROVED (WARNING-level issues only — non-blocking)\n'
+                : '',
               review,
               '',
               '---',
-              `_Model: claude-opus-4-6 | Diff: ${truncated ? 'truncated' : 'full'} | PR: #${pr.number} | Token: #${usedKey}_`,
+              `_Model: claude-opus-4-6 | Diff: ${truncated ? 'truncated' : 'full'} | PR: #${pr.number} | Token: #${usedKey} | Severity: ${severity}_`,
             ].join('\n');
 
             await github.rest.pulls.createReview({
@@ -228,10 +248,10 @@ jobs:
               body,
             });
 
-            console.log(`Posted ${event} review for PR #${pr.number} (token #${usedKey})`);
+            console.log(`Posted ${event} review for PR #${pr.number} (token #${usedKey}, severity: ${severity})`);
 
             if (event === 'REQUEST_CHANGES') {
-              core.setFailed('AI review requested changes. Fix the issues before merging.');
+              core.setFailed('AI review requested changes (CRITICAL issues). Fix the issues before merging.');
             }
 
       - name: Notify review failure
