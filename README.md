@@ -263,7 +263,6 @@ MIT — See [LICENSE](LICENSE).
 Building the future of AI agent operations.
 
 - 🐦 [@The_AGI_WAY](https://x.com/The_AGI_WAY)
-- 💬 [Discord](https://discord.gg/miyabi)
 - 📧 shunsuke.hayashi@miyabi-ai.jp
 
 ---
