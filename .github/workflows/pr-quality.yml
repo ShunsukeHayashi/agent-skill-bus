@@ -1,0 +1,68 @@
+name: PR Quality Gates
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited]
+    branches: [master, main]
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. PR Description Check
+  # ─────────────────────────────────────────────
+  pr-description:
+    name: PR Description Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR description
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            const title = pr.title || '';
+            
+            const issues = [];
+            
+            // Title must be non-empty and descriptive
+            if (title.length < 10) {
+              issues.push('❌ PR title is too short (min 10 chars)');
+            }
+            
+            // Body must have some content
+            if (body.length < 30) {
+              issues.push('❌ PR description is too short (min 30 chars). Please describe what this PR does and why.');
+            }
+            
+            // Skip check for Copilot PRs (they auto-generate descriptions)
+            if (pr.user.login === 'app/copilot-swe-agent' || pr.user.login === 'Copilot') {
+              console.log('Copilot PR — skipping description check');
+              return;
+            }
+            
+            if (issues.length > 0) {
+              const message = `## PR Quality Check\n\n${issues.join('\n')}\n\nPlease update your PR description before this can be reviewed.`;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: message,
+              });
+              core.setFailed(issues.join('; '));
+            } else {
+              console.log('PR description looks good ✅');
+            }
+
+  # ─────────────────────────────────────────────
+  # 2. Prettier Format Check
+  # ─────────────────────────────────────────────
+  format-check:
+    name: Format Check (Prettier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock
+      - name: Check formatting
+        run: npx prettier --check "src/**/*.js" "src/**/*.mjs" || echo "::warning::Some files need formatting. Run 'npx prettier --write .' locally."
