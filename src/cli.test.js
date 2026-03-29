@@ -56,4 +56,26 @@ describe('agent-skill-bus cli', () => {
 
     rmSync(tempDir, { recursive: true, force: true });
   });
+
+  it('reports resolved legacy paths', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'asb-cli-paths-legacy-'));
+    const queueDir = join(tempDir, '.skill-bus/queue');
+    const monitorDir = join(tempDir, '.skill-bus/monitor');
+    const watcherDir = join(tempDir, '.skill-bus/watcher');
+    mkdirSync(queueDir, { recursive: true });
+    mkdirSync(monitorDir, { recursive: true });
+    mkdirSync(watcherDir, { recursive: true });
+
+    const result = spawnSync(process.execPath, [CLI, 'paths', '--data-dir', tempDir], { encoding: 'utf-8' });
+    assert.strictEqual(result.status, 0);
+
+    const payload = JSON.parse(result.stdout);
+    assert.strictEqual(payload.layout, 'legacy-dot-skill-bus');
+    assert.strictEqual(payload.queueDir, queueDir);
+    assert.strictEqual(payload.skillsDir, monitorDir);
+    assert.strictEqual(payload.kwDir, watcherDir);
+    assert.strictEqual(payload.files.queue, join(queueDir, 'prompt-request-queue.jsonl'));
+
+    rmSync(tempDir, { recursive: true, force: true });
+  });
 });
