@@ -55,23 +55,27 @@ function getDefaultDirs(baseDir) {
 
 function describeResolvedPaths(baseDir, queueDir, skillsDir, kwDir) {
   const legacyDetected = existsSync(resolve(baseDir, '.skill-bus'));
+  const files = {
+    queue: resolve(queueDir, 'prompt-request-queue.jsonl'),
+    locks: resolve(queueDir, 'active-locks.jsonl'),
+    dag: resolve(queueDir, 'dag-state.jsonl'),
+    history: resolve(queueDir, 'prompt-request-history.md'),
+    runs: resolve(skillsDir, 'skill-runs.jsonl'),
+    health: resolve(skillsDir, 'skill-health.json'),
+    improvements: resolve(skillsDir, 'skill-improvements.md'),
+    watcherState: resolve(kwDir, 'knowledge-state.json'),
+    watcherDiffs: resolve(kwDir, 'knowledge-diffs.jsonl'),
+  };
   return {
     dataDir: baseDir,
     layout: legacyDetected ? 'legacy-dot-skill-bus' : 'standard-skills-subdirs',
     queueDir,
     skillsDir,
     kwDir,
-    files: {
-      queue: resolve(queueDir, 'prompt-request-queue.jsonl'),
-      locks: resolve(queueDir, 'active-locks.jsonl'),
-      dag: resolve(queueDir, 'dag-state.jsonl'),
-      history: resolve(queueDir, 'prompt-request-history.md'),
-      runs: resolve(skillsDir, 'skill-runs.jsonl'),
-      health: resolve(skillsDir, 'skill-health.json'),
-      improvements: resolve(skillsDir, 'skill-improvements.md'),
-      watcherState: resolve(kwDir, 'knowledge-state.json'),
-      watcherDiffs: resolve(kwDir, 'knowledge-diffs.jsonl'),
-    },
+    files,
+    exists: Object.fromEntries(
+      Object.entries(files).map(([name, filePath]) => [name, existsSync(filePath)])
+    ),
   };
 }
 
@@ -445,7 +449,7 @@ switch (command) {
   case 'dag': {
     const dagId = args[1];
     if (!dagId) { console.error('Usage: skill-bus dag <dag-id>'); process.exit(1); }
-    output(queue.getDagState(dagId));
+    output(queue.getDagState(dagId) ?? null);
     break;
   }
 

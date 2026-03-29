@@ -75,6 +75,20 @@ describe('agent-skill-bus cli', () => {
     assert.strictEqual(payload.skillsDir, monitorDir);
     assert.strictEqual(payload.kwDir, watcherDir);
     assert.strictEqual(payload.files.queue, join(queueDir, 'prompt-request-queue.jsonl'));
+    assert.strictEqual(payload.exists.queue, false);
+    assert.strictEqual(payload.exists.locks, false);
+    assert.strictEqual(payload.exists.dag, false);
+
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('returns null for missing dag state', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'asb-cli-dag-null-'));
+    initSkillLayout(tempDir);
+
+    const result = spawnSync(process.execPath, [CLI, 'dag', 'missing-dag', '--data-dir', tempDir], { encoding: 'utf-8' });
+    assert.strictEqual(result.status, 0);
+    assert.strictEqual(result.stdout.trim(), 'null');
 
     rmSync(tempDir, { recursive: true, force: true });
   });
