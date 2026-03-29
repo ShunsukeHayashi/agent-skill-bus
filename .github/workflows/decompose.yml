@@ -1,10 +1,9 @@
 name: Decompose Issue for Copilot
 
 # copilot ラベルが付いた Issue を Claude Opus で分析。
-# 粗粒度（vague / multi-part / doc-only になりそう）なら原子的なサブタスクに分解して
+# 粗粒度（vague / multi-part / doc-only になりそう）なら原子的サブタスクに分解して
 # GitHub Sub-issues API で子 Issue として親に紐づける（サブイシュー化）。
 # 粒度が適切（atomic）なら何もせず copilot-assign.yml に任せる。
-# タスク5 (B5): Context Sufficiency Check ステップを追加
 
 on:
   issues:
@@ -33,100 +32,15 @@ jobs:
             }));
             console.log(`Issue #${issue.number} written to /tmp/issue.json`);
 
-      - name: Context Sufficiency Check
-        id: context_check
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const issue = context.payload.issue;
-            const body = issue.body || '';
-            const title = issue.title || '';
-            const combined = title + '\n' + body;
-            
-            // ファイルパス（拡張子）の検出
-            const codeFilePattern = /\.(ts|js|py|sh|sql|yml|yaml|json|go|rb|java|cpp|c|rs)\b/i;
-            const hasFilePath = codeFilePattern.test(combined);
-            
-            // DB/認証関連キーワード
-            const sensitivePattern = /\b(migration|oauth|webhook|auth|trigger|sql|database|schema|security|authentication|authorization)\b/i;
-            const hasSensitiveKeyword = sensitivePattern.test(combined);
-            
-            // DESIGN_CONSTRAINTS.md への言及
-            const hasConstraintRef = /DESIGN_CONSTRAINTS|design constraint|architecture constraint/i.test(combined);
-            
-            let issues = [];
-            let shouldWarn = false;
-            
-            // ルール1: コードファイルパスが含まれていない場合
-            if (!hasFilePath) {
-              issues.push('⚠️ **Missing file paths**: This issue does not mention any specific code files (`.ts`, `.js`, `.py`, `.sh`, etc.). Copilot needs concrete file paths to produce working code.');
-              shouldWarn = true;
-            }
-            
-            // ルール2: DB/認証関連で設計制約への言及がない場合
-            if (hasSensitiveKeyword && !hasConstraintRef) {
-              issues.push('⚠️ **Missing design constraints**: This issue involves database/auth/security work but does not reference `DESIGN_CONSTRAINTS.md` or architectural guidelines. Critical decisions may be made without proper guardrails.');
-              shouldWarn = true;
-            }
-            
-            core.setOutput('should_warn', shouldWarn.toString());
-            core.setOutput('issues', JSON.stringify(issues));
-            console.log(`Context check: should_warn=${shouldWarn}, issues=${issues.length}`);
-
-      - name: Warn and remove copilot label if context insufficient
-        if: steps.context_check.outputs.should_warn == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const issue = context.payload.issue;
-            const issues = JSON.parse('${{ steps.context_check.outputs.issues }}');
-            
-            // copilot ラベルを除去
-            await github.rest.issues.removeLabel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.number,
-              name: 'copilot'
-            }).catch(() => {});
-            
-            // 警告コメントを投稿
-            const body = [
-              '## ⚠️ Context Sufficiency Check Failed',
-              '',
-              'This issue does not provide enough context for Copilot Coding Agent to succeed. The `copilot` label has been removed.',
-              '',
-              '### Issues Detected',
-              ...issues.map(i => `- ${i}`),
-              '',
-              '### How to Fix',
-              '1. **Add specific file paths** (e.g., `src/auth.js`, `scripts/migrate.sh`) to the issue body',
-              '2. For database/auth/security work: reference `DESIGN_CONSTRAINTS.md` or include architectural guidelines',
-              '3. Re-add the `copilot` label after updating the issue',
-              '',
-              '_Automated by Context Sufficiency Check (decompose.yml)_'
-            ].join('\n');
-            
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.number,
-              body
-            });
-            
-            core.setFailed('Context sufficiency check failed. Issue needs more details.');
-
       - name: Setup Node.js
-        if: steps.context_check.outputs.should_warn != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
       - name: Install Claude CLI
-        if: steps.context_check.outputs.should_warn != 'true'
         run: npm install -g @anthropic-ai/claude-code@latest
 
       - name: Analyze Issue with Claude Opus
-        if: steps.context_check.outputs.should_warn != 'true'
         id: analyze
         env:
           CLAUDE_CODE_OAUTH_TOKEN_1: ${{ secrets.CLAUDE_CODE_TOKEN }}
@@ -139,25 +53,18 @@ jobs:
           ISSUE_NUM=$(python3 -c "import json; print(json.load(open('issue.json'))['number'])")
           ISSUE_TITLE=$(python3 -c "import json; print(json.load(open('issue.json'))['title'])")
 
-          # Issue body を完全にファイルへ書き出してstdinでClaudeに渡す
+          # Issue body を安全にファイルへ書き出してstdinでClaudeに渡す
           python3 -c "import json; print(json.load(open('issue.json'))['body'])" > /tmp/issue_body.txt
 
           SYSTEM_PROMPT="You are a software engineering task decomposer. Given a GitHub Issue, classify it as atomic or coarse, then return ONLY valid JSON with no extra text or markdown fences."
 
-          USER_PROMPT="Classify GitHub Issue #${ISSUE_NUM}: ${ISSUE_TITLE}
+          # USER_PROMPT をファイルに書き出す（base64 + Python env var 方式で YAML インデント問題を回避）
+          export _PROMPT_B64='Q2xhc3NpZnkgR2l0SHViIElzc3VlICNJU1NVRV9OVU06IElTU1VFX1RJVExFCgpBVE9NSUMgPSBzaW5nbGUgY29uY3JldGUgaW1wbGVtZW50YXRpb246IGNyZWF0ZXMvbW9kaWZpZXMgMS0zIHNwZWNpZmljIGNvZGUgZmlsZXMsIGNsZWFyIGFjY2VwdGFuY2UgY3JpdGVyaWEsIHByb2R1Y2VzIHJ1bm5hYmxlIGNvZGUgKG5vdCBqdXN0IC5tZCBkb2NzKS4KQ09BUlNFID0gdmFndWUsIGxhcmdlIHNjb3BlICg0KyBmaWxlcyksIG11bHRpLXN0ZXAsIG9yIHdvdWxkIHByb2R1Y2UgZG9jdW1lbnRhdGlvbi1vbmx5IG91dHB1dC4KClJldHVybiBPTkxZIHRoaXMgSlNPTiAobm8gb3RoZXIgdGV4dCk6CgpJZiBhdG9taWM6CnsiYXRvbWljIjp0cnVlLCJyZWFzb24iOiJvbmUgc2VudGVuY2UiLCJzdWJ0YXNrcyI6W119CgpJZiBjb2Fyc2UgKDItNCBzdWJ0YXNrcyk6CnsiYXRvbWljIjpmYWxzZSwicmVhc29uIjoib25lIHNlbnRlbmNlIiwic3VidGFza3MiOlt7InRpdGxlIjoiZmVhdDogc3BlY2lmaWMgdmVyYiArIG9iamVjdCArIHRhcmdldCBmaWxlIiwiYm9keSI6IiMjIFdoYXQgdG8gaW1wbGVtZW50XG4tIENyZWF0ZSBzcmMvWC5qcyB3aXRoIGZ1bmN0aW9uIFkgdGhhdCBkb2VzIFpcblxuIyMgQWNjZXB0YW5jZSBDcml0ZXJpYVxuLSBbIF0gc3JjL1guanMgZXhpc3RzIHdpdGggd29ya2luZyBpbXBsZW1lbnRhdGlvblxuLSBbIF0gVGVzdHMgcGFzc1xuXG4jIyBFeHBlY3RlZCBvdXRwdXQgZmlsZXNcbi0gc3JjL1guanNcblxuIyMgRG8gTk9UXG4tIENyZWF0ZSAubWQtb25seSBQUnNcbi0gV3JpdGUgcGxhY2Vob2xkZXIgaW1wbGVtZW50YXRpb25zIn1dfQoKVGhlIGlzc3VlIGJvZHkgZm9sbG93czo='
+          export _ISSUE_NUM="${ISSUE_NUM}"
+          export _ISSUE_TITLE="${ISSUE_TITLE}"
+          python3 -c "import base64,os; b=base64.b64decode(os.environ['_PROMPT_B64']).decode(); b=b.replace('ISSUE_NUM',os.environ['_ISSUE_NUM']); b=b.replace('ISSUE_TITLE',os.environ['_ISSUE_TITLE']); open('/tmp/user_prompt.txt','w').write(b)"
+          USER_PROMPT=$(cat /tmp/user_prompt.txt)
 
-ATOMIC = single concrete implementation: creates/modifies 1-3 specific code files, clear acceptance criteria, produces runnable code (not just .md docs).
-COARSE = vague, large scope (4+ files), multi-step, or would produce documentation-only output.
-
-Return ONLY this JSON (no other text):
-
-If atomic:
-{\"atomic\":true,\"reason\":\"one sentence\",\"subtasks\":[]}
-
-If coarse (2-4 subtasks):
-{\"atomic\":false,\"reason\":\"one sentence\",\"subtasks\":[{\"title\":\"feat: specific verb + object + target file\",\"body\":\"## What to implement\n- Create src/X.js with function Y that does Z\n\n## Acceptance Criteria\n- [ ] src/X.js exists with working implementation\n- [ ] Tests pass\n\n## Expected output files\n- src/X.js\n\n## Do NOT\n- Create .md-only PRs\n- Write placeholder implementations\"}]}
-
-The issue body follows:"
 
           RESULT='{"atomic":true,"reason":"Defaulting to atomic (analysis unavailable)","subtasks":[]}'
 

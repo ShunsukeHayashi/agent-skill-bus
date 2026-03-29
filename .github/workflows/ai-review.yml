@@ -1,12 +1,8 @@
 name: AI Code Review
 
-# Copilot が作成した PR を Claude Opus で自動レビュー
-#
+# Copilot が作成した PR を Claude Opus で自動レビュー。
 # APPROVE されたものだけ auto-merge.yml がマージする。
 # Claude Code CLI（claude --print）+ OAuth トークンローテーションで動作。
-# タスク1: CRITICAL 深刻度分岐を実装（WARNING のみ → APPROVE + コメント）
-# タスク2 (B4): DESIGN_CONSTRAINTS.md 読み込みステップを追加
-# タスク4 (B2): auto-fix — @copilot 自動修正コメント投稿を追加
 
 on:
   pull_request:
@@ -36,18 +32,6 @@ jobs:
       - name: Install claude CLI
         run: npm install -g @anthropic-ai/claude-code@latest
 
-      - name: Load Design Constraints
-        id: constraints
-        run: |
-          if [ -f DESIGN_CONSTRAINTS.md ]; then
-            CONSTRAINTS=$(cat DESIGN_CONSTRAINTS.md | head -100)
-          else
-            CONSTRAINTS="No design constraints found."
-          fi
-          echo "CONSTRAINTS<<EOFDC" >> $GITHUB_OUTPUT
-          echo "$CONSTRAINTS" >> $GITHUB_OUTPUT
-          echo "EOFDC" >> $GITHUB_OUTPUT
-
       - name: Get PR diff
         id: diff
         run: |
@@ -64,7 +48,7 @@ jobs:
           if [ -z "$CHANGED" ]; then
             echo "doc_only=false" >> $GITHUB_OUTPUT
           else
-          NON_MD=$(echo "$CHANGED" | grep -v '\.md$' | head -1)
+            NON_MD=$(echo "$CHANGED" | grep -v '\.md$' | head -1)
             if [ -z "$NON_MD" ]; then
               echo "doc_only=true" >> $GITHUB_OUTPUT
               echo "WARNING: PR contains only .md files — will auto-reject."
@@ -80,7 +64,7 @@ jobs:
           MAX = 18000
           truncated = len(diff) > MAX
           if truncated:
-             diff = diff[:MAX] + '\n...[diff truncated due to length]'
+              diff = diff[:MAX] + '\n...[diff truncated due to length]'
           with open('/tmp/pr.diff.limited', 'w') as f:
               f.write(diff)
           print('truncated=true' if truncated else 'truncated=false')
@@ -127,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SYSTEM_PROMPT="You are a principal engineer performing an automated code review of a GitHub Pull Request created by Copilot Coding Agent. Evaluate the PR for: (1) correctness — does it fulfill the linked Issue requirements? (2) code quality — no dead code, no placeholder implementations; (3) security — no hardcoded secrets, proper input validation; (4) tests — new logic should have tests. Be strict. Only APPROVE if the PR is production-ready and contains real executable code. If the PR contains only .md documentation files with no code, immediately REQUEST_CHANGES. PROJECT DESIGN CONSTRAINTS (you must follow these): ${{ steps.constraints.outputs.CONSTRAINTS }}"
+          SYSTEM_PROMPT="You are a principal engineer performing an automated code review of a GitHub Pull Request created by Copilot Coding Agent. Evaluate the PR for: (1) correctness — does it fulfill the linked Issue requirements? (2) code quality — no dead code, no placeholder implementations; (3) security — no hardcoded secrets, proper input validation; (4) tests — new logic should have tests. Be strict. Only APPROVE if the PR is production-ready and contains real executable code. If the PR contains only .md documentation files with no code, immediately REQUEST_CHANGES."
 
           USER_PROMPT="PR #${PR_NUMBER}: ${PR_TITLE}
           Branch: ${PR_BRANCH}
@@ -205,16 +189,6 @@ jobs:
           echo "$REVIEW" > /tmp/review_output.txt
           echo "used_key=$USED_KEY" >> $GITHUB_OUTPUT
 
-          # タスク1: CRITICAL キーワード検出
-          CRITICAL_KEYWORDS="CRITICAL|security|auth|injection|SQL injection|authentication|authorization|vulnerability"
-          if echo "$REVIEW" | grep -qiE "$CRITICAL_KEYWORDS"; then
-            echo "severity=CRITICAL" >> $GITHUB_OUTPUT
-            echo "CRITICAL issue detected in review"
-          else
-            echo "severity=WARNING" >> $GITHUB_OUTPUT
-            echo "Only WARNING-level issues detected"
-          fi
-
           if echo "$REVIEW" | grep -q '\*\*\[APPROVE\]\*\*'; then
             echo "verdict=APPROVE" >> $GITHUB_OUTPUT
           else
@@ -231,28 +205,19 @@ jobs:
             const fs = require('fs');
             const review = fs.readFileSync('/tmp/review_output.txt', 'utf8');
             const verdict = '${{ steps.review.outputs.verdict }}';
-            const severity = '${{ steps.review.outputs.severity }}';
             const usedKey = '${{ steps.review.outputs.used_key }}';
             const truncated = process.env.truncated === 'true';
             const pr = context.payload.pull_request;
 
-            // タスク1: WARNING のみの場合は APPROVE に変換
-            let event = verdict === 'APPROVE' ? 'APPROVE' : 'REQUEST_CHANGES';
-            if (verdict === 'REQUEST_CHANGES' && severity === 'WARNING') {
-              event = 'APPROVE';
-              console.log('Severity is WARNING-only, converting REQUEST_CHANGES to APPROVE with comments');
-            }
+            const event = verdict === 'APPROVE' ? 'APPROVE' : 'REQUEST_CHANGES';
 
             const body = [
               '## AI Code Review -- Claude Opus 4.6 (via Claude Code CLI)',
               '',
-              severity === 'WARNING' && verdict === 'REQUEST_CHANGES' 
-                ? '**Status**: ✅ APPROVED (WARNING-level issues only — non-blocking)\n'
-                : '',
               review,
               '',
               '---',
-              `_Model: claude-opus-4-6 | Diff: ${truncated ? 'truncated' : 'full'} | PR: #${pr.number} | Token: #${usedKey} | Severity: ${severity}_`,
+              `_Model: claude-opus-4-6 | Diff: ${truncated ? 'truncated' : 'full'} | PR: #${pr.number} | Token: #${usedKey}_`,
             ].join('\n');
 
             await github.rest.pulls.createReview({
@@ -263,64 +228,11 @@ jobs:
               body,
             });
 
-            console.log(`Posted ${event} review for PR #${pr.number} (token #${usedKey}, severity: ${severity})`);
+            console.log(`Posted ${event} review for PR #${pr.number} (token #${usedKey})`);
 
             if (event === 'REQUEST_CHANGES') {
-              core.setFailed('AI review requested changes (CRITICAL issues). Fix the issues before merging.');
+              core.setFailed('AI review requested changes. Fix the issues before merging.');
             }
-
-      - name: Auto-fix via Copilot (WARNING only)
-        if: steps.review.outputs.verdict == 'REQUEST_CHANGES'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const review = fs.readFileSync('/tmp/review_output.txt', 'utf8');
-            const hasCritical = /CRITICAL|security|injection|auth.*bypass/i.test(review);
-            const pr = context.payload.pull_request;
-            
-            if (hasCritical) {
-              // CRITICAL: needs-human ラベル付与して停止
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                labels: ['needs-human']
-              });
-              console.log('CRITICAL found. Added needs-human label.');
-              return;
-            }
-            
-            // WARNING のみ: リトライ回数チェック
-            const comments = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr.number,
-              per_page: 100
-            });
-            const autoFixCount = comments.data.filter(c => c.body.includes('[Auto-fix attempt')).length;
-            
-            if (autoFixCount >= 2) {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                labels: ['needs-human']
-              });
-              console.log('Max retries reached. Added needs-human label.');
-              return;
-            }
-            
-            // Required Changes セクションを抽出
-            const changesMatch = review.match(/## Required Changes\n([\s\S]*?)(\n---|\n##|$)/);
-            const changes = changesMatch ? changesMatch[1].trim() : 'See review comments above.';
-            
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr.number,
-              body: `@copilot [Auto-fix attempt ${autoFixCount + 1}/2] Please fix the following issues:\n\n${changes}`
-            });
 
       - name: Notify review failure
         if: steps.review.outcome == 'failure'
