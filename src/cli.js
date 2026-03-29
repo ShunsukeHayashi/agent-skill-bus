@@ -22,6 +22,7 @@ import { PromptRequestQueue } from './queue.js';
 import { SkillMonitor } from './self-improve.js';
 import { KnowledgeWatcher } from './knowledge-watcher.js';
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -36,11 +37,97 @@ function hasFlag(name) {
   return args.includes(`--${name}`);
 }
 
+function getDefaultDirs(baseDir) {
+  const legacyDir = resolve(baseDir, '.skill-bus');
+  if (existsSync(legacyDir)) {
+    return {
+      queueDir: resolve(baseDir, '.skill-bus/queue'),
+      skillsDir: resolve(baseDir, '.skill-bus/monitor'),
+      kwDir: resolve(baseDir, '.skill-bus/watcher'),
+    };
+  }
+  return {
+    queueDir: resolve(baseDir, 'skills/prompt-request-bus'),
+    skillsDir: resolve(baseDir, 'skills/self-improving-skills'),
+    kwDir: resolve(baseDir, 'skills/knowledge-watcher'),
+  };
+}
+
+function showHelp(subcommand = null) {
+  if (subcommand === 'enqueue') {
+    console.log(`Usage: skill-bus enqueue --source <source> --priority <critical|high|medium|low> --agent <agent> --task "<task>"
+
+Options:
+  --context <text>
+  --deadline <none|immediate|24h|week-end>
+  --files <comma,separated,files>
+  --skills <comma,separated,skills>
+  --depends-on <comma,separated,pr-ids>
+  --dag-id <id>
+  --data-dir <path>
+  --queue-dir <path>`);
+    return;
+  }
+
+  if (subcommand === 'record-run') {
+    console.log(`Usage: skill-bus record-run --agent <agent> --skill <skill> --task "<task>" --result <success|fail|partial> --score <0.0-1.0>
+
+Options:
+  --notes <text>
+  --data-dir <path>
+  --skills-dir <path>`);
+    return;
+  }
+
+  console.log(`Agent Skill Bus v1.3.1
+
+Usage: skill-bus <command> [options]
+       npx agent-skill-bus <command> [options]
+
+Setup:
+  init          Initialize skill-bus in current directory
+
+Queue Commands:
+  enqueue       Add a prompt request to the queue
+  dispatch      Get next dispatchable PRs
+  start <id>    Mark a PR as running (acquire locks)
+  complete <id> Mark a PR as done (release locks)
+  fail <id>     Mark a PR as failed
+  stats         Show queue statistics
+  locks         Show active locks (--release-expired to clean)
+  dag <id>      Show DAG state
+
+Skill Monitoring:
+  record-run    Log a skill execution result
+  health        Update and show skill health summary
+  flagged       Show skills that need attention
+  drift         Detect silent score degradation
+  dashboard     Visual skill health dashboard (--days N, --no-color)
+
+Knowledge Watcher:
+  diffs         Show diff stats (--unprocessed for pending)
+
+Options:
+  --data-dir <path>   Base directory (default: cwd)
+  --queue-dir <path>  Queue data dir (relative to data-dir or absolute)
+  --skills-dir <path> Skills data dir (relative to data-dir or absolute)
+  --kw-dir <path>     Knowledge watcher dir (relative to data-dir or absolute)
+`);
+}
+
+const wantsHelp = args.includes('--help') || args.includes('-h');
+if (wantsHelp) {
+  const subcommand = command && !command.startsWith('-') ? command : null;
+  showHelp(subcommand);
+  process.exit(0);
+}
+
 // Default data directories
 const dataDir = getFlag('data-dir', process.cwd());
-const queueDir = resolve(dataDir, getFlag('queue-dir', 'skills/prompt-request-bus'));
-const skillsDir = resolve(dataDir, getFlag('skills-dir', 'skills/self-improving-skills'));
-const kwDir = resolve(dataDir, getFlag('kw-dir', 'skills/knowledge-watcher'));
+const defaults = getDefaultDirs(dataDir);
+const queueDir = getFlag('queue-dir', defaults.queueDir);
+const skillsDir = getFlag('skills-dir', defaults.skillsDir);
+const kwDir = getFlag('kw-dir', defaults.kwDir);
 
 const queue = new PromptRequestQueue(queueDir);
 const monitor = new SkillMonitor(skillsDir);
@@ -81,7 +168,6 @@ switch (command) {
       'skills/knowledge-watcher/knowledge-state.json': '{"lastCheck":"","sources":{}}',
       'skills/knowledge-watcher/knowledge-diffs.jsonl': '',
     };
-
     let created = 0;
     for (const [f, content] of Object.entries(files)) {
       const full = resolve(initDir, f);
@@ -90,7 +176,6 @@ switch (command) {
         created++;
       }
     }
-
     // Copy bundled SKILL.md files from package
     const pkgDir = dn(dn(fileURLToPath(import.meta.url)));
     const skillMds = [
@@ -98,7 +183,6 @@ switch (command) {
       'skills/self-improving-skills/SKILL.md',
       'skills/knowledge-watcher/SKILL.md',
     ];
-
     for (const s of skillMds) {
       const dest = resolve(initDir, s);
       const src = jn(pkgDir, s);
@@ -107,7 +191,6 @@ switch (command) {
         created++;
       }
     }
-
     output({
       status: 'initialized',
       directory: initDir,
@@ -116,14 +199,12 @@ switch (command) {
     });
     break;
   }
-
   case 'enqueue': {
     // Parse comma-separated list flags
     const parseList = (name) => {
       const val = getFlag(name, '');
       return val ? val.split(',').map(s => s.trim()).filter(Boolean) : [];
     };
-
     const pr = queue.enqueue({
       source: getFlag('source', 'human'),
       priority: getFlag('priority', 'medium'),
@@ -143,14 +224,12 @@ switch (command) {
     }
     break;
   }
-
   case 'dispatch': {
     const max = parseInt(getFlag('max', '5'), 10);
     const dispatchable = queue.getDispatchable(max);
     output({ count: dispatchable.length, prs: dispatchable });
     break;
   }
-
   case 'start': {
     const prId = args[1];
     if (!prId) { console.error('Usage: skill-bus start <pr-id>'); process.exit(1); }
@@ -158,7 +237,6 @@ switch (command) {
     output({ status: 'running', pr });
     break;
   }
-
   case 'complete': {
     const prId = args[1];
     if (!prId) { console.error('Usage: skill-bus complete <pr-id>'); process.exit(1); }
@@ -166,7 +244,6 @@ switch (command) {
     output({ status: 'completed', prId });
     break;
   }
-
   case 'fail': {
     const prId = args[1];
     if (!prId) { console.error('Usage: skill-bus fail <pr-id>'); process.exit(1); }
@@ -174,12 +251,10 @@ switch (command) {
     output({ status: 'failed', prId });
     break;
   }
-
   case 'stats': {
     output(queue.stats());
     break;
   }
-
   case 'record-run': {
     const entry = monitor.recordRun({
       agent: getFlag('agent', 'default'),
@@ -192,181 +267,40 @@ switch (command) {
     output({ status: 'recorded', entry });
     break;
   }
-
   case 'health': {
     const days = parseInt(getFlag('days', '7'), 10);
     const health = monitor.updateHealth(days);
     output(health);
     break;
-  }
-
-  case 'flagged': {
+  } case 'flagged': {
     const days = parseInt(getFlag('days', '7'), 10);
     const flagged = monitor.getFlagged(days);
     output({ count: flagged.length, skills: flagged });
     break;
-  }
-
-  case 'drift': {
+  } case 'drift': {
     const drifting = monitor.detectDrift();
     output({ count: drifting.length, skills: drifting });
     break;
-  }
-
-  case 'dashboard': {
+  } case 'dashboard': {
     const days = parseInt(getFlag('days', '7'), 10);
     const noColor = hasFlag('no-color') || process.env.NO_COLOR;
     const health = monitor.analyze(days);
-    const queueStats = queue.stats();
-
-    // ANSI helpers
-    const c = noColor
-      ? { reset: '', bold: '', dim: '', red: '', green: '', yellow: '', blue: '', cyan: '', magenta: '', bgRed: '', bgGreen: '', bgYellow: '' }
-      : { reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m', red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', blue: '\x1b[34m', cyan: '\x1b[36m', magenta: '\x1b[35m', bgRed: '\x1b[41m', bgGreen: '\x1b[42m', bgYellow: '\x1b[43m' };
-
-    const bar = (score, width = 20) => {
+    const queueStats = queue.stats();    // ANSI helpers
+    const c = noColor ? { reset: '', bold: '', dim: '', red: '', green: '', yellow: '', blue: '', cyan: '', magenta: '', bgRed: '', bgGreen: '', bgYellow: '' } : { reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m', red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', blue: '\x1b[34m', cyan: '\x1b[36m', magenta: '\x1b[35m', bgRed: '\x1b[41m', bgGreen: '\x1b[42m', bgYellow: '\x1b[43m' };    const bar = (score, width = 20) => {
       const filled = Math.round(score * width);
       const empty = width - filled;
       const color = score >= 0.8 ? c.green : score >= 0.6 ? c.yellow : c.red;
       return color + '█'.repeat(filled) + c.dim + '░'.repeat(empty) + c.reset;
-    };
-
-    const trendIcon = (trend) => {
+    };    const trendIcon = (trend) => {
       switch (trend) {
-        case 'improving': return c.green + '↑' + c.reset;
-        case 'declining': return c.red + '↓' + c.reset;
-        case 'broken':    return c.bgRed + c.bold + ' ✗ ' + c.reset;
-        default:          return c.dim + '─' + c.reset;
+        case 'improving': return c.green + 'ₔ' + c.reset;
+        case 'declining': return c.red + '⌙' + c.reset;
+        case 'broken':    return c.bgRed + c.bold + ' ✐ ' + c.reset;
+        default:          return c.dim + '⌅' + c.reset;
       }
-    };
-
-    const statusDot = (flagged) => flagged
-      ? c.red + '●' + c.reset
-      : c.green + '●' + c.reset;
-
-    // Header
+    };    const statusDot = (flagged) => flagged ? c.red + '◐' + c.reset : c.green + '◑' + c.reset;    // Header
     console.log();
-    console.log(`${c.bold}${c.cyan}╔══════════════════════════════════════════════════════════════╗${c.reset}`);
+    console.log(`${c.bold}${c.cyan}╗═══════════════════════════════════════════════════════════╤${c.reset}`);
     console.log(`${c.bold}${c.cyan}║${c.reset}  ${c.bold}Agent Skill Bus — Dashboard${c.reset}              ${c.dim}(${days}-day window)${c.reset}  ${c.bold}${c.cyan}║${c.reset}`);
-    console.log(`${c.bold}${c.cyan}╚══════════════════════════════════════════════════════════════╝${c.reset}`);
-    console.log();
-
-    // Queue summary
-    console.log(`${c.bold}  Queue${c.reset}`);
-    console.log(`  ${c.dim}├─${c.reset} Total: ${c.bold}${queueStats.total}${c.reset}  ${c.dim}│${c.reset}  Pending: ${c.yellow}${queueStats.byStatus?.pending || 0}${c.reset}  ${c.dim}│${c.reset}  Running: ${c.blue}${queueStats.byStatus?.running || 0}${c.reset}  ${c.dim}│${c.reset}  Done: ${c.green}${queueStats.byStatus?.done || 0}${c.reset}`);
-    console.log(`  ${c.dim}└─${c.reset} Active locks: ${queueStats.activeLocks || 0}`);
-    console.log();
-
-    // Skills table
-    const entries = Object.entries(health);
-    if (entries.length === 0) {
-      console.log(`  ${c.dim}No skill runs recorded yet.${c.reset}`);
-      console.log(`  ${c.dim}Run: npx agent-skill-bus record-run --agent my-agent --skill my-skill --task "test" --result success --score 0.9${c.reset}`);
-    } else {
-      console.log(`${c.bold}  Skills${c.reset}  ${c.dim}(${entries.length} tracked)${c.reset}`);
-      console.log(`  ${c.dim}${'─'.repeat(58)}${c.reset}`);
-      console.log(`  ${c.dim}  Status  Skill                Score  Trend  Runs  Fails${c.reset}`);
-      console.log(`  ${c.dim}${'─'.repeat(58)}${c.reset}`);
-
-      // Sort: flagged first, then by score ascending
-      entries.sort((a, b) => {
-        if (a[1].flagged !== b[1].flagged) return b[1].flagged ? 1 : -1;
-        return a[1].avgScore - b[1].avgScore;
-      });
-
-      for (const [name, data] of entries) {
-        const displayName = name.length > 18 ? name.slice(0, 17) + '…' : name.padEnd(18);
-        const scoreStr = data.avgScore.toFixed(2).padStart(5);
-        const scoreColor = data.avgScore >= 0.8 ? c.green : data.avgScore >= 0.6 ? c.yellow : c.red;
-        const runsStr = String(data.runs).padStart(4);
-        const failsStr = data.consecutiveFails > 0
-          ? c.red + String(data.consecutiveFails).padStart(4) + c.reset
-          : c.dim + '   0' + c.reset;
-        console.log(`  ${statusDot(data.flagged)}  ${displayName}  ${scoreColor}${scoreStr}${c.reset}  ${trendIcon(data.trend)}     ${runsStr}  ${failsStr}`);
-      }
-      console.log(`  ${c.dim}${'─'.repeat(58)}${c.reset}`);
-
-      // Score distribution bar chart
-      const flaggedCount = entries.filter(([_, d]) => d.flagged).length;
-      const healthyCount = entries.length - flaggedCount;
-      console.log();
-      console.log(`  ${c.green}● Healthy: ${healthyCount}${c.reset}  ${c.red}● Flagged: ${flaggedCount}${c.reset}`);
-
-      if (flaggedCount > 0) {
-        console.log();
-        console.log(`  ${c.bold}${c.red}⚠ Flagged Skills${c.reset}`);
-        for (const [name, data] of entries.filter(([_, d]) => d.flagged)) {
-          const reason = data.trend === 'broken' ? 'consecutive failures'
-            : data.trend === 'declining' ? 'score declining'
-            : `avg score ${data.avgScore.toFixed(2)} < 0.70`;
-          console.log(`  ${c.red}→${c.reset} ${name}: ${reason}  ${bar(data.avgScore, 15)}`);
-        }
-      }
-    }
-
-    console.log();
-    break;
-  }
-
-  case 'diffs': {
-    if (hasFlag('unprocessed')) {
-      output(watcher.getUnprocessed());
-    } else {
-      output(watcher.stats());
-    }
-    break;
-  }
-
-  case 'locks': {
-    if (hasFlag('release-expired')) {
-      const result = queue.releaseExpiredLocks();
-      output({ status: 'cleaned', ...result });
-    } else {
-      output(queue.readLocks());
-    }
-    break;
-  }
-
-  case 'dag': {
-    const dagId = args[1];
-    if (!dagId) { console.error('Usage: skill-bus dag <dag-id>'); process.exit(1); }
-    output(queue.getDagState(dagId));
-    break;
-  }
-
-  default:
-    console.log(`Agent Skill Bus v1.3.0
-
-Usage: skill-bus <command> [options]
-       npx agent-skill-bus <command> [options]
-
-Setup:
-  init          Initialize skill-bus in current directory
-
-Queue Commands:
-  enqueue       Add a prompt request to the queue
-  dispatch      Get next dispatchable PRs
-  start <id>    Mark a PR as running (acquire locks)
-  complete <id> Mark a PR as done (release locks)
-  fail <id>     Mark a PR as failed
-  stats         Show queue statistics
-  locks         Show active locks (--release-expired to clean)
-  dag <id>      Show DAG state
-
-Skill Monitoring:
-  record-run    Log a skill execution result
-  health        Update and show skill health summary
-  flagged       Show skills that need attention
-  drift         Detect silent score degradation
-  dashboard     Visual skill health dashboard (--days N, --no-color)
-
-Knowledge Watcher:
-  diffs         Show diff stats (--unprocessed for pending)
-
-Options:
-  --data-dir <path>   Base directory (default: cwd)
-  --queue-dir <path>  Queue data dir (relative to data-dir)
-  --skills-dir <path> Skills data dir (relative to data-dir)
-  --kw-dir <path>     Knowledge watcher dir (relative to data-dir)
-`);
-}
+    console.log(kk�w��H�Ʋ��b��(�+��+y�b�
+'y�hnf���O��z��֜r�݊x%
