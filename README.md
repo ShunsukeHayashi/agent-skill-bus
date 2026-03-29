@@ -41,7 +41,7 @@ External Changes ──→ Knowledge Watcher ──→ Prompt Request Bus ──
 Most agent frameworks handle **execution** (LangGraph, CrewAI, AutoGen). None handle **operational health**:
 
 - 🔴 **Skills silently degrade** — An API changes, a model updates, auth expires. Nobody notices until it fails in production.
-- 🔴 **Tasks collide** — Two agents edit the same file. Data corruption.
+- 🔴 **Tasks collide** — Two agents edit the same file simultaneously. Data corruption.
 - 🔴 **No dependency management** — Complex tasks need A→B→C ordering. Most systems just run everything in parallel.
 - 🔴 **No learning loop** — Failures repeat because there's no feedback mechanism.
 
@@ -66,7 +66,7 @@ npx agent-skill-bus enqueue --source human --priority high --agent dev --task "F
 npx agent-skill-bus dispatch
 
 # See which data files this project is actually using
-npx agent-skill-bus paths
+npx agent-skill-bus daths
 ```
 
 ### For Claude Code / Codex users
@@ -88,6 +88,103 @@ npx agent-skill-bus dashboard
 ```
 
 ```
-╔═══════════════════════════════════════════════════════╗
+╔══════════════════════════════════════════════════════════╗
 ║              🚌 Agent Skill Bus Dashboard               ║
-╚══════════════════════════════════════════════════════╝
+╚═══════════════════════════════════════════════════════╝
+
+📊 Queue: 3 queued │ 1 running │ 12 completed │ 0 failed
+
+ Status   Skill               Score  Trend  Health
+────────────────────────────────────────────────────────
+ ● ALERT  api-caller           0.42   ↓     ██░░░░░░░░░░
+ ● OK     code-review          0.95   ↑     ███████████░
+ ● OK     deploy-pipeline      0.88   ─     ██████████░░
+
+⚠ Flagged Skills:
+  api-caller — score_drop: dropped from 0.91 to 0.42 (drift: -53.8%)
+```
+
+Options: `--days N` (default: 7), `--no-color` for CI/piping.
+
+## Modules
+
+### 📬 Prompt Request Bus
+
+A JSONL-based task queue with:
+
+- **DAG dependency resolution** — Tasks specify `dependsOn` other tasks. Automatic topological execution.
+- **File-level locking** — Prevent two agents from editing the same file. TTL-based deadlock prevention.
+- **Priority routing** — `critical > high > medium > low`. Critical tasks bypass the queue.
+- **Multi-source ingestion** — Human commands, cron jobs, GitHub webhooks, internal triggers all use the same format.
+- **Deduplication** — Same task won't be queued twice.
+
+```json
+{
+  "id": "pr-001",
+  "ts": "2026-03-18T08:00:00Z",
+  "source": "human",
+  "priority": "high",
+  "agent": "dev-agent",
+  "task": "Fix authentication bug in auth.ts",
+  "status": "queued",
+  "dependsOn": [],
+  "affectedFiles": ["myapp:src/auth.ts"],
+  "dagId": null
+}
+```
+
+[Full documentation →](skills/prompt-request-bus/SKILL.md)
+
+### 🔄 Self-Improving Skills
+
+A 7-step quality loop inspired by [Cognee's self-improving agents](https://www.cognee.ai):
+
+```
+OBSERVE → ANALYZE → DIAGNOSE → PROPOSE → EVALUATE → APPLY → RECORD
+```
+
+- **Automatic failure detection** — Score drops, trend analysis, consecutive failure alerts.
+- **LLM-powered diagnosis** — Reads the failing skill + error logs, identifies root cause.
+- **Safe auto-repair** — Low-risk fixes applied automatically. High-risk changes need human approval.
+- **Drift detection** — Catches silent degradation (score drops >15% week-over-week).
+
+[Full documentation →](skills/self-improving-skills/SKILL.md)
+
+### 👁️ Knowledge Watcher
+
+Monitors external changes and triggers improvement requests:
+
+- **Tier 1 (every check):** Dependency versions, API changes, config drift
+- **Tier 2 (daily):** Community patterns, user feedback, platform changes
+- **Tier 3 (weekly):** Industry trends, competitor releases, best practice updates
+
+When a change is detected:
+1. Assess impact on existing skills
+2. Generate a Prompt Request with severity rating
+3. Route to Self-Improving Skills or human reviewer
+
+[Full documentation →](skills/knowledge-watcher/SKILL.md)
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Architecture Deep Dive](docs/architecture.md) | System design, JSONL data layer, DAG scheduling, file locking |
+| [Self-Improving Skills](docs/self-improving-skills.md) | The 7-step quality loop, drift detection, auto-repair |
+| [Knowledge Watcher](docs/knowledge-watcher.md) | Three-tier monitoring, change detection, impact assessment |
+| [Integration Guide](docs/integration-guide.md) | Claude Code, Codex, LangGraph, CrewAI, CI/CD setup |
+| [Framework Comparison](docs/comparison.md) | Feature matrix vs. LangGraph, CrewAI, AutoGen, Mastra, VoltAgent |
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  Agent Skill Bus                     │
+│                                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐ │
+│  │   Knowledge   │  │    Prompt    │  │   Self-   │ │
+│  │   Watcher     │──│   Request    │──│ Improving │ │
+│  │   (detect)    │  │   Bus (route)│  │  (repair) │ │
+│  └──────────────┘  └──────────────┘  └───────────┘ │
+│         │                  │                │       │
+                                               : 0���q�^
