@@ -13,7 +13,7 @@
  *   skill-bus record-run --agent dev --skill api-caller --task "fetch" --result success --score 1.0
  *   skill-bus flagged [--days 7]
  *   skill-bus drift
- *   skill-bus dashboard [--days 7] [--no-color]
+ *   skill-bus dashboard [--days 7] [--no-color] [--web] [--output path/dashboard.html]
  *   skill-bus diffs [--unprocessed]
  *   skill-bus locks [--release-expired]
  */
@@ -21,8 +21,9 @@
 import { PromptRequestQueue } from './queue.js';
 import { SkillMonitor } from './self-improve.js';
 import { KnowledgeWatcher } from './knowledge-watcher.js';
+import { buildWebDashboard } from './web-dashboard.js';
 import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -335,6 +336,23 @@ switch (command) {
   case 'dashboard': {
     const days = parseInt(getFlag('days', '7'), 10);
     const noColor = hasFlag('no-color') || process.env.NO_COLOR;
+
+    // --web: generate standalone HTML dashboard
+    if (hasFlag('web')) {
+      const outPath = resolve(getFlag('output', 'dashboard.html'));
+      const { join } = await import('node:path');
+      const html = buildWebDashboard({
+        runsFile: join(skillsDir, 'skill-runs.jsonl'),
+        queueFile: join(queueDir, 'prompt-request-queue.jsonl'),
+        diffsFile: join(kwDir, 'knowledge-diffs.jsonl'),
+        days,
+      });
+      writeFileSync(outPath, html, 'utf-8');
+      console.log(`\nWeb dashboard generated: ${outPath}`);
+      console.log(`Open in browser: open ${outPath}`);
+      break;
+    }
+
     const health = monitor.analyze(days);
     const queueStats = queue.stats();
 
